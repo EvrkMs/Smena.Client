@@ -23,20 +23,20 @@ public partial class MainForm : Form
     {
         var client = new EmployeeService.EmployeeServiceClient(_channel);
 
-        // Выбираем streaming метод
-        var call = client.EmployeesListStream(new GetEmployeesRequest());
+        // Обычный unary вызов - получаем весь ответ сразу
+        var response = await client.EmployeesListAsync(new GetEmployeesRequest());
 
-        // Читаем стрим асинхронно
-        await foreach (var emp in call.ResponseStream.ReadAllAsync())
+        // Обновляем UI одним вызовом
+        EmployeeListBox.Invoke(() =>
         {
-            // Обновление UI через Invoke
-            EmployeeListBox.Invoke(() =>
+            EmployeeListBox.Items.Clear(); // Очищаем старые данные
+
+            foreach (var emp in response.Employees)
             {
                 EmployeeListBox.Items.Add($"{emp.Id} - {emp.Name}");
-            });
-        }
+            }
+        });
     }
-
     private async void button1_Click(object sender, EventArgs e)
     {
         if (string.IsNullOrEmpty(textBox1.Text))
