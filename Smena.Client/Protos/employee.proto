@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services";
+
+// Сущность Employee
+message GrpcEmployee {
+    string id = 1;
+    string name = 2;
+}
+
+// Запрос для получения списка
+message GetEmployeesRequest {}
+
+// Ответ со списком
+message GetEmployeesResponse {
+    repeated GrpcEmployee employees = 1;
+}
+
+
+message BoolResponse {
+    bool value = 1;
+}
+
+// Сервис
+service EmployeeService {
+    rpc EmployeesList(GetEmployeesRequest) returns (GetEmployeesResponse);
+    rpc EmployeesListStream(GetEmployeesRequest) returns (stream GrpcEmployee);
+
+    rpc EmployeeAdd(GrpcEmployee) returns (BoolResponse);
+}
