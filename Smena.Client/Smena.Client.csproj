@@ -15,9 +15,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="MaterialSkin.2" Version="2.3.1" />
   </ItemGroup>
+
 	<ItemGroup>
-		<Protobuf Include="Protos\employee.proto" GrpsServices="Client"/>
+		<Protobuf Include="Protos\employee.proto" GrpsServices="Client" />
+		<Protobuf Include="Protos\safe.proto" GrpsServices="Client" />
 	</ItemGroup>
 
 </Project>

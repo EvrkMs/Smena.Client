@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Safe";
+
+enum TypeOperation {
+    TYPE_OPERATION_UNSPECIFIED = 0; // обязателен!
+    ADVANCE = 1;
+    COMING = 2;
+    EXPENSE = 3;
+}
+message GrpcSafe {
+    string id = 1;
+    uint32 amount = 2;
+    TypeOperation operatin= 3;
+}
+
+message GrpcRequest {
+}
+
+message GrpcCurrentSafeResponse {
+    int64 current = 1;
+}
+
+service GrpcSafeService {
+    rpc CurrentSafe(GrpcRequest) returns (GrpcCurrentSafeResponse);
+}

@@ -1,4 +1,6 @@
-﻿namespace Smena.Client
+﻿using MaterialSkin.Controls;
+
+namespace Smena.Client
 {
     partial class MainForm
     {
@@ -28,54 +30,131 @@
         /// </summary>
         private void InitializeComponent()
         {
-            EmployeeListBox = new ListBox();
-            textBox1 = new TextBox();
-            button1 = new Button();
+            mainTabSelector = new MaterialTabSelector();
+            mainTabControl = new MaterialTabControl();
+            raportPage = new TabPage();
+            addEmployeeHoursBlockButton = new Button();
+            employeePage = new TabPage();
+            employeeListView = new ListView();
+            employeeAddButton = new MaterialButton();
+            mainTabControl.SuspendLayout();
+            raportPage.SuspendLayout();
+            employeePage.SuspendLayout();
             SuspendLayout();
             // 
-            // EmployeeListBox
+            // mainTabSelector
             // 
-            EmployeeListBox.FormattingEnabled = true;
-            EmployeeListBox.Location = new Point(12, 12);
-            EmployeeListBox.Name = "EmployeeListBox";
-            EmployeeListBox.Size = new Size(364, 364);
-            EmployeeListBox.TabIndex = 0;
+            mainTabSelector.BaseTabControl = mainTabControl;
+            mainTabSelector.CharacterCasing = MaterialTabSelector.CustomCharacterCasing.Normal;
+            mainTabSelector.Depth = 0;
+            mainTabSelector.Dock = DockStyle.Bottom;
+            mainTabSelector.Font = new Font("Roboto", 14F, FontStyle.Regular, GraphicsUnit.Pixel);
+            mainTabSelector.Location = new Point(3, 630);
+            mainTabSelector.MouseState = MaterialSkin.MouseState.HOVER;
+            mainTabSelector.Name = "mainTabSelector";
+            mainTabSelector.Size = new Size(1258, 48);
+            mainTabSelector.TabIndex = 0;
             // 
-            // textBox1
+            // mainTabControl
             // 
-            textBox1.Location = new Point(457, 12);
-            textBox1.Name = "textBox1";
-            textBox1.Size = new Size(229, 23);
-            textBox1.TabIndex = 1;
+            mainTabControl.Controls.Add(raportPage);
+            mainTabControl.Controls.Add(employeePage);
+            mainTabControl.Depth = 0;
+            mainTabControl.Dock = DockStyle.Fill;
+            mainTabControl.Location = new Point(3, 64);
+            mainTabControl.MouseState = MaterialSkin.MouseState.HOVER;
+            mainTabControl.Multiline = true;
+            mainTabControl.Name = "mainTabControl";
+            mainTabControl.SelectedIndex = 0;
+            mainTabControl.Size = new Size(1258, 566);
+            mainTabControl.TabIndex = 1;
             // 
-            // button1
+            // raportPage
             // 
-            button1.Location = new Point(493, 41);
-            button1.Name = "button1";
-            button1.Size = new Size(155, 25);
-            button1.TabIndex = 2;
-            button1.Text = "button1";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += this.button1_Click;
+            raportPage.BackColor = Color.Fuchsia;
+            raportPage.Controls.Add(addEmployeeHoursBlockButton);
+            raportPage.Location = new Point(4, 24);
+            raportPage.Name = "raportPage";
+            raportPage.Size = new Size(1250, 538);
+            raportPage.TabIndex = 0;
+            raportPage.Text = "Закрытие смены";
+            // 
+            // addEmployeeHoursBlockButton
+            // 
+            addEmployeeHoursBlockButton.Location = new Point(3, 3);
+            addEmployeeHoursBlockButton.Name = "addEmployeeHoursBlockButton";
+            addEmployeeHoursBlockButton.Size = new Size(241, 23);
+            addEmployeeHoursBlockButton.TabIndex = 0;
+            addEmployeeHoursBlockButton.Text = "добавить строку сотрудника";
+            addEmployeeHoursBlockButton.UseVisualStyleBackColor = true;
+            addEmployeeHoursBlockButton.Click += AddEmployeeAndHours_Click;
+            // 
+            // employeePage
+            // 
+            employeePage.Controls.Add(employeeListView);
+            employeePage.Controls.Add(employeeAddButton);
+            employeePage.Location = new Point(4, 24);
+            employeePage.Name = "employeePage";
+            employeePage.Size = new Size(1250, 538);
+            employeePage.TabIndex = 1;
+            employeePage.Text = "Работа с сотрудниками";
+            employeePage.UseVisualStyleBackColor = true;
+            // 
+            // employeeListView
+            // 
+            employeeListView.BackColor = Color.Indigo;
+            employeeListView.Dock = DockStyle.Top;
+            employeeListView.ForeColor = SystemColors.MenuBar;
+            employeeListView.Location = new Point(0, 0);
+            employeeListView.Name = "employeeListView";
+            employeeListView.Size = new Size(1250, 493);
+            employeeListView.TabIndex = 2;
+            employeeListView.UseCompatibleStateImageBehavior = false;
+            // 
+            // employeeAddButton
+            // 
+            employeeAddButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            employeeAddButton.Density = MaterialButton.MaterialButtonDensity.Default;
+            employeeAddButton.Depth = 0;
+            employeeAddButton.Dock = DockStyle.Bottom;
+            employeeAddButton.HighEmphasis = true;
+            employeeAddButton.Icon = null;
+            employeeAddButton.Location = new Point(0, 502);
+            employeeAddButton.Margin = new Padding(4, 6, 4, 6);
+            employeeAddButton.MouseState = MaterialSkin.MouseState.HOVER;
+            employeeAddButton.Name = "employeeAddButton";
+            employeeAddButton.NoAccentTextColor = Color.Empty;
+            employeeAddButton.Size = new Size(1250, 36);
+            employeeAddButton.TabIndex = 1;
+            employeeAddButton.Text = "Добавить";
+            employeeAddButton.Type = MaterialButton.MaterialButtonType.Contained;
+            employeeAddButton.UseAccentColor = false;
+            employeeAddButton.UseVisualStyleBackColor = true;
+            employeeAddButton.Click += EmployeeAddButton_Click;
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
-            Controls.Add(button1);
-            Controls.Add(textBox1);
-            Controls.Add(EmployeeListBox);
+            ClientSize = new Size(1264, 681);
+            Controls.Add(mainTabControl);
+            Controls.Add(mainTabSelector);
             Name = "MainForm";
-            Text = "Form1";
+            mainTabControl.ResumeLayout(false);
+            raportPage.ResumeLayout(false);
+            employeePage.ResumeLayout(false);
+            employeePage.PerformLayout();
             ResumeLayout(false);
-            PerformLayout();
         }
 
         #endregion
 
-        private ListBox EmployeeListBox;
-        private TextBox textBox1;
-        private Button button1;
+        private MaterialSkin.Controls.MaterialTabSelector mainTabSelector;
+        private MaterialTabControl mainTabControl;
+        private TabPage raportPage;
+        private TabPage employeePage;
+        private MaterialButton employeeAddButton;
+        private ListView employeeListView;
+        private Button addEmployeeHoursBlockButton;
     }
 }
