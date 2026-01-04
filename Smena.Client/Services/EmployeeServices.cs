@@ -5,29 +5,38 @@ using System.ComponentModel;
 
 namespace Smena.Client.Services;
 
-public class EmployeeService(GrpcChannel _channel)
+public class EmployeeService
 {
-    private readonly GrpcEmployeeService.GrpcEmployeeServiceClient Client = new(_channel);
-
+    private readonly GrpcEmployeeService.GrpcEmployeeServiceClient Client;
     public BindingList<GrpcEmployee> Employees { get; private set; } = [];
 
-    public async void LoadOrReloadList()
+
+    public EmployeeService(GrpcChannel _channel)
     {
-        var response = await Client.EmployeesListAsync(new GrpcRequest());
+        Client = new(_channel);
 
-        if (response == null)
+        _ = LoadOrReloadListAsync();
+    }
+
+    public async Task LoadOrReloadListAsync()
+    {
+        try
         {
-            MessageBox.Show("Ошибка: ответ вернулся null");
-            return;
-        }
+            var response = await Client.EmployeesListAsync(new GrpcRequest());
 
-        Employees.Clear();
-        foreach (var employee in response.Employees)
+            if (response?.Employees == null) return;
+
+            Employees.Clear();
+            foreach (var employee in response.Employees)
+            {
+                Employees.Add(employee);
+            }
+            Employees.ResetBindings();
+        }
+        catch (RpcException ex)
         {
-            Employees.Add(employee);
+            MessageBox.Show($"gRPC: {ex.StatusCode} - {ex.Message}");
         }
-
-        Employees.ResetBindings();
     }
 
     public async Task<bool> AddEmployeeAsync(GrpcEmployee employee)
@@ -40,7 +49,7 @@ public class EmployeeService(GrpcChannel _channel)
                 MessageBox.Show("Ошибка: создание сотрудника вернуло null");
                 return false;
             }
-            LoadOrReloadList();
+            await LoadOrReloadListAsync();
             return true;
         }
         catch (Exception ex)

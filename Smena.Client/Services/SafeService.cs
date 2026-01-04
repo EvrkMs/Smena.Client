@@ -3,7 +3,7 @@ using Host.Grpc.Services.Safe;
 
 namespace Smena.Client.Services;
 
-class SafeService
+public class SafeService
 {
     private readonly GrpcSafeService.GrpcSafeServiceClient Client;
     public long CurrentSafe 

@@ -1,9 +1,5 @@
 ﻿using Grpc.Net.Client;
-class GrpcService
+class GrpcService(string address)
 {
-    public GrpcChannel Channel { get; }
-    public GrpcService(string address = "https://localhost:5001")
-    {
-        Channel = GrpcChannel.ForAddress(address);
-    }
+    public GrpcChannel Channel => GrpcChannel.ForAddress(address);
 }
