@@ -13,8 +13,6 @@ internal partial class MainForm : MaterialForm
     private readonly SafeService safeService;
     private readonly GrpcService grpcService;
 
-    public static readonly GrpcEmployee NullComboBox = new() { Name = "Нет" };
-
     public MainForm()
     {
         grpcService = new("http://192.168.88.254:5000");
