@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Inventory";
+
+package inventory;
+
+import "Protos/import/boolresponse.proto";
+
+service GrpcInventoryService {
+  rpc SendInventory(GrpcInventoryRequest) returns (responses.BoolResponse);  // укажите полный package.type
+}
+
+message GrpcInventoryRequest {
+  int32 total_amount = 1;
+  repeated EmployeeInventory employees = 2;
+}
+
+message EmployeeInventory {
+  string employee_id = 1;
+}

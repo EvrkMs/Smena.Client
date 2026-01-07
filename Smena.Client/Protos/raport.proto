@@ -1,0 +1,27 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Raport";
+
+package raport;
+import "Protos/import/boolresponse.proto";
+import "Protos/import/emptyrequest.proto";
+
+service GrpcRaportService {
+  rpc SendRaport(GrpcRaportRequest) returns (responses.BoolResponse);
+}
+
+message GrpcRaportRequest {
+  int32 fact_cash = 1;
+  int32 fact_non_cash = 2;
+  int32 program_cash = 3;
+  int32 program_non_cash = 4;
+  int32 fact_safe = 5;
+  repeated EmployeeRaportSalary employees = 7;
+  string why_minus = 8;
+}
+
+message EmployeeRaportSalary {
+  string employee_id = 1;
+  int32 hours = 2;
+  int32 minus = 3;
+}

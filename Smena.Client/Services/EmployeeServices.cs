@@ -1,6 +1,7 @@
 ﻿using Grpc.Core;
 using Grpc.Net.Client;
 using Host.Grpc.Services.Employee;
+using Host.Grpc.Services.Requests;
 using System.ComponentModel;
 
 namespace Smena.Client.Services;
@@ -22,7 +23,7 @@ public class EmployeeService
     {
         try
         {
-            var response = await Client.EmployeesListAsync(new GrpcRequest());
+            var response = await Client.EmployeesListAsync(new EmptyRequest());
 
             if (response?.Employees == null) return;
 

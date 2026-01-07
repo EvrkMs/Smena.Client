@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Requests";
+
+package requests;
+
+message EmptyRequest {
+  bool value = 1;
+  string message = 2;
+}

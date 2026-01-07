@@ -2,19 +2,21 @@ syntax = "proto3";
 
 option csharp_namespace = "Host.Grpc.Services.Safe";
 
+import "Protos/import/emptyrequest.proto";
+import "Protos/import/boolresponse.proto";
+
 enum TypeOperation {
     TYPE_OPERATION_UNSPECIFIED = 0; // обязателен!
     ADVANCE = 1;
     COMING = 2;
     EXPENSE = 3;
 }
-message GrpcSafe {
+
+message GrpcSafeOperation {
     string id = 1;
     uint32 amount = 2;
-    TypeOperation operatin= 3;
-}
-
-message GrpcRequest {
+    TypeOperation type = 3;
+    string Comment = 4;
 }
 
 message GrpcCurrentSafeResponse {
@@ -22,5 +24,6 @@ message GrpcCurrentSafeResponse {
 }
 
 service GrpcSafeService {
-    rpc CurrentSafe(GrpcRequest) returns (GrpcCurrentSafeResponse);
+    rpc CurrentSafe(requests.EmptyRequest) returns (GrpcCurrentSafeResponse);
+    rpc SafeOperation(GrpcSafeOperation) returns (responses.BoolResponse);
 }

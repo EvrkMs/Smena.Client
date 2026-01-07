@@ -1,4 +1,5 @@
 ﻿using Host.Grpc.Services.Employee;
+using Host.Grpc.Services.Raport;
 using MaterialSkin.Controls;
 using Smena.Client.Services;
 using System.ComponentModel;
@@ -13,10 +14,8 @@ public partial class RaportUserControl : UserControl
         public GrpcEmployee? Employee { get; set; }
         public int Hours { get; set; }
         public int Minus { get; set; }
-        public int CashSafeDeduction { get; set; } // Минус по кассе/сейфу
-        public int Salary => (Hours * HourlyRate) - Minus - CashSafeDeduction;
-
-        public const int HourlyRate = 190;
+        public int HourlyRate => Employee.HourlyRate; // Дефолтное значение
+        public int Salary => (Hours * HourlyRate) - Minus;
 
         public string SalaryInfo => this.ToString();
 
@@ -41,7 +40,7 @@ public partial class RaportUserControl : UserControl
         public List<EmployeeHoursList> Employees { get; set; } = [];
         public int TotalSalary { get; set; }
 
-        public const int InitialCash = 1000; // Начальная сумма в кассе
+        public const int InitialCash = 1000;
     }
     #endregion
 
@@ -49,6 +48,7 @@ public partial class RaportUserControl : UserControl
 
     private EmployeeService? employeeService;
     private SafeService? safeService;
+    private RaportService? raportService;
     private readonly List<ComboBox> comboBoxes = [];
     private readonly List<MaterialTextBox> hoursTextBoxes = [];
     private readonly List<MaterialTextBox> minusTextBoxes = [];
@@ -73,13 +73,16 @@ public partial class RaportUserControl : UserControl
 
     #region Public API
 
-    public void Initialize(EmployeeService employeeService, SafeService safeService)
+    public void Initialize(EmployeeService employeeService, SafeService safeService, RaportService raportService)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
         ArgumentNullException.ThrowIfNull(safeService);
+        ArgumentNullException.ThrowIfNull(raportService);
 
         this.employeeService = employeeService;
         this.safeService = safeService;
+        this.raportService = raportService;
+
         SubscribeToEvents();
     }
 
@@ -89,233 +92,169 @@ public partial class RaportUserControl : UserControl
         safeService?.SafeChanged -= Event_SafeChanged;
         UnsubscribeComboBoxes();
         UnsubscribeNumericTextBoxes();
+
+        buttonСalculate.Click -= OnCalculateClick;
+        buttonSend.Click -= OnSendClick;
     }
 
     public IReadOnlyList<EmployeeHoursList> GetEmployeesData() => employeesData;
-
-    public bool ValidateAndDistributeDiscrepancies()
-    {
-        var report = GenerateReport();
-        int totalDiscrepancy = Math.Abs(report.CashDiscrepancy) + Math.Abs(report.SafeDiscrepancy);
-
-        if (totalDiscrepancy == 0)
-        {
-            // Нет минусов - очищаем все вычеты
-            foreach (var emp in employeesData)
-            {
-                emp.CashSafeDeduction = 0;
-            }
-            employeesData.ResetBindings();
-            return true;
-        }
-
-        if (employeesData.Count == 0)
-        {
-            MessageBox.Show(
-                "Невозможно распределить минусы: не выбран ни один сотрудник!",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-            return false;
-        }
-
-        if (employeesData.Count == 1)
-        {
-            // Автоматически весь минус на одного сотрудника
-            employeesData[0].CashSafeDeduction = totalDiscrepancy;
-            employeesData.ResetBindings();
-            UpdateReportPreview(null, EventArgs.Empty);
-            return true;
-        }
-
-        // Несколько сотрудников - показываем диалог
-        return ShowDiscrepancyDistributionDialog(totalDiscrepancy);
-    }
 
     public ReportData GenerateReport()
     {
         var report = new ReportData
         {
-            Date = DateTime.Now
+            Date = DateTime.Now,
+            FactCash = int.TryParse(textBoxFactCash.Text, out var fc) ? fc : 0,
+            FactNonCash = int.TryParse(textBoxFactNonCash.Text, out var fnc) ? fnc : 0,
+
+            ProgramCash = int.TryParse(textBoxProgramCash.Text, out var pc) ? pc : 0,
+            ProgramNonCash = int.TryParse(textBoxProgramNonCash.Text, out var pnc) ? pnc : 0,
+            ProgramSafe = safeService?.CurrentSafe ?? 0,
+
+            FactSafe = int.TryParse(textBoxSafe.Text, out var fs) ? fs : 0
         };
-
-        // Факт
-        report.FactCash = int.TryParse(textBoxFactCash.Text, out var fc) ? fc : 0;
-        report.FactNonCash = int.TryParse(textBoxFactNonCash.Text, out var fnc) ? fnc : 0;
-
-        // Программа
-        report.ProgramCash = int.TryParse(textBoxProgramCash.Text, out var pc) ? pc : 0;
-        report.ProgramNonCash = int.TryParse(textBoxProgramNonCash.Text, out var pnc) ? pnc : 0;
-        report.ProgramSafe = safeService?.CurrentSafe ?? 0;
-
-        // Сейф
-        report.FactSafe = int.TryParse(textBoxSafe.Text, out var fs) ? fs : 0;
         report.NewSafe = report.FactSafe + (report.FactCash - ReportData.InitialCash);
 
         int safeDiscrepancy = report.FactSafe - (int)report.ProgramSafe;
         report.SafeDiscrepancy = safeDiscrepancy > 0 ? 0 : safeDiscrepancy;
 
-        // Выручка и итог
         report.Revenue = (report.FactCash - ReportData.InitialCash) + report.FactNonCash;
-        report.TotalSalary = employeesData.Sum(e => e.Salary); // Уже включает CashSafeDeduction
+        report.TotalSalary = employeesData.Sum(e => e.Salary);
         report.Total = report.Revenue - report.TotalSalary;
 
-        // Расхождение по кассе
         int discrepancy = (report.FactCash + report.FactNonCash) - (report.ProgramCash + report.ProgramNonCash);
         report.CashDiscrepancy = discrepancy < 0 ? discrepancy : 0;
 
-        // Сотрудники
-        report.Employees = employeesData.ToList();
+        report.Employees = [.. employeesData];
 
         return report;
     }
 
     #endregion
 
-    #region Discrepancy Distribution
+    #region Event Handlers
 
-    private bool ShowDiscrepancyDistributionDialog(int totalDiscrepancy)
+    private void OnCalculateClick(object? sender, EventArgs e)
     {
-        using var dialog = new Form
+        if (employeesData.Count == 0)
         {
-            Text = "Распределение минусов",
-            Width = 400,
-            Height = 300,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            StartPosition = FormStartPosition.CenterParent,
-            MaximizeBox = false,
-            MinimizeBox = false
-        };
-
-        var panel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(10)
-        };
-
-        int yPos = 10;
-
-        // Заголовок
-        var lblTitle = new Label
-        {
-            Text = $"Общий минус для распределения: {totalDiscrepancy} руб.",
-            Location = new Point(10, yPos),
-            AutoSize = true,
-            Font = new Font(Font.FontFamily, 10, FontStyle.Bold)
-        };
-        panel.Controls.Add(lblTitle);
-        yPos += 30;
-
-        // Поля для каждого сотрудника
-        var deductionBoxes = new Dictionary<EmployeeHoursList, TextBox>();
-
-        foreach (var emp in employeesData)
-        {
-            var lblName = new Label
-            {
-                Text = emp.Employee?.Name ?? "Неизвестно",
-                Location = new Point(10, yPos),
-                Width = 200
-            };
-            panel.Controls.Add(lblName);
-
-            var txtDeduction = new TextBox
-            {
-                Location = new Point(220, yPos - 3),
-                Width = 100,
-                Text = emp.CashSafeDeduction.ToString()
-            };
-            txtDeduction.KeyPress += (s, e) =>
-            {
-                if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
-                    e.Handled = true;
-            };
-            panel.Controls.Add(txtDeduction);
-
-            var lblRub = new Label
-            {
-                Text = "руб.",
-                Location = new Point(330, yPos),
-                AutoSize = true
-            };
-            panel.Controls.Add(lblRub);
-
-            deductionBoxes[emp] = txtDeduction;
-            yPos += 30;
+            MessageBox.Show(
+                "Выберите хотя бы одного сотрудника!",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
         }
 
-        yPos += 10;
+        UpdateReportPreview(null, EventArgs.Empty);
 
-        // Кнопки
-        var btnOk = new Button
+        MessageBox.Show(
+            "Расчёт выполнен успешно! Проверьте данные и нажмите 'Отправить' для отправки отчёта.",
+            "Расчёт завершён",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information
+        );
+    }
+
+    private async void OnSendClick(object? sender, EventArgs e)
+    {
+        if (employeesData.Count == 0)
         {
-            Text = "ОК",
-            Location = new Point(150, yPos),
-            DialogResult = DialogResult.OK
+            MessageBox.Show(
+                "Выберите хотя бы одного сотрудника!",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
+
+        var report = GenerateReport();
+
+        // Показываем подтверждение с итоговыми данными
+        var totalMinusCash = Math.Abs(report.CashDiscrepancy);
+        var totalMinusSafe = Math.Abs(report.SafeDiscrepancy);
+        var totalMinusEntered = employeesData.Sum(e => e.Minus);
+
+        var confirmMessage = $"Отчёт за смену:\n\n" +
+                           $"Выручка: {report.Revenue} руб.\n" +
+                           $"ЗП сотрудников: {report.TotalSalary} руб.\n" +
+                           $"Итог: {report.Total} руб.\n\n";
+
+        if (totalMinusCash > 0 || totalMinusSafe > 0)
+        {
+            confirmMessage += $"Минус по кассе: {totalMinusCash} руб.\n" +
+                            $"Минус по сейфу: {totalMinusSafe} руб.\n" +
+                            $"Всего минусов: {totalMinusCash + totalMinusSafe} руб.\n" +
+                            $"Указано минусов: {totalMinusEntered} руб.\n\n";
+        }
+
+        confirmMessage += "Отправить отчёт?";
+
+        var result = MessageBox.Show(
+            confirmMessage,
+            "Подтверждение отправки",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question
+        );
+
+        if (result != DialogResult.Yes)
+            return;
+
+        var request = new GrpcRaportRequest
+        {
+            FactCash = report.FactCash,
+            FactNonCash = report.FactNonCash,
+            ProgramCash = report.ProgramCash,
+            ProgramNonCash = report.ProgramNonCash,
+            FactSafe = report.FactSafe,
+            WhyMinus = textBoxWhyMinus.Text
         };
-        panel.Controls.Add(btnOk);
 
-        var btnCancel = new Button
+        foreach (var emp in report.Employees)
         {
-            Text = "Отмена",
-            Location = new Point(240, yPos),
-            DialogResult = DialogResult.Cancel
-        };
-        panel.Controls.Add(btnCancel);
-
-        dialog.Controls.Add(panel);
-        dialog.AcceptButton = btnOk;
-        dialog.CancelButton = btnCancel;
-
-        if (dialog.ShowDialog() == DialogResult.OK)
-        {
-            // Валидация и применение
-            int sum = 0;
-            var newDeductions = new Dictionary<EmployeeHoursList, int>();
-
-            foreach (var kvp in deductionBoxes)
+            request.Employees.Add(new EmployeeRaportSalary
             {
-                if (int.TryParse(kvp.Value.Text, out var deduction))
-                {
-                    newDeductions[kvp.Key] = deduction;
-                    sum += deduction;
-                }
-                else
-                {
-                    MessageBox.Show(
-                        $"Некорректное значение для сотрудника {kvp.Key.Employee?.Name}",
-                        "Ошибка",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                    return false;
-                }
-            }
+                EmployeeId = emp.Employee?.Id ?? "",
+                Hours = emp.Hours,
+                Minus = emp.Minus,
+            });
+        }
 
-            if (sum != totalDiscrepancy)
+        buttonSend.Enabled = false;
+        buttonСalculate.Enabled = false;
+
+        try
+        {
+            var (success, message) = await raportService!.SendRaportAsync(request);
+
+            if (success)
             {
                 MessageBox.Show(
-                    $"Сумма распределенных минусов ({sum} руб.) не совпадает с общим минусом ({totalDiscrepancy} руб.)!",
-                    "Ошибка распределения",
+                    message,
+                    "Успех",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
+
+                ClearAllFields();
+            }
+            else
+            {
+                MessageBox.Show(
+                    message,
+                    "Ошибка",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 );
-                return false;
             }
-
-            // Применяем значения
-            foreach (var kvp in newDeductions)
-            {
-                kvp.Key.CashSafeDeduction = kvp.Value;
-            }
-
-            employeesData.ResetBindings();
-            UpdateReportPreview(null, EventArgs.Empty);
-            return true;
         }
-
-        return false; // Пользователь отменил
+        finally
+        {
+            buttonSend.Enabled = true;
+            buttonСalculate.Enabled = true;
+        }
     }
 
     #endregion
@@ -356,7 +295,6 @@ public partial class RaportUserControl : UserControl
             textBoxSafe
         ]);
 
-        // Инициализация словаря предыдущих значений
         foreach (var hoursBox in hoursTextBoxes)
         {
             previousHoursValues[hoursBox] = "0";
@@ -382,11 +320,13 @@ public partial class RaportUserControl : UserControl
             textBox.TextChanged += UpdateReportPreview;
         }
 
-        // Валидация суммы часов
         foreach (var hoursBox in hoursTextBoxes)
         {
             hoursBox.TextChanged += ValidateTotalHours;
         }
+
+        buttonСalculate.Click += OnCalculateClick;
+        buttonSend.Click += OnSendClick;
     }
 
     private void UnsubscribeComboBoxes()
@@ -418,21 +358,17 @@ public partial class RaportUserControl : UserControl
     {
         if (sender is not MaterialTextBox textBox) return;
 
-        // Разрешаем только цифры и управляющие клавиши
         if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
         {
             e.Handled = true;
             return;
         }
 
-        // Проверяем максимальную длину с учетом выделенного текста
         if (!char.IsControl(e.KeyChar))
         {
             bool isHoursField = hoursTextBoxes.Contains(textBox);
             int maxLength = isHoursField ? 2 : 6;
 
-            // Вычисляем реальную длину после ввода символа
-            // Если текст выделен - он будет заменен новым символом
             int newLength = textBox.TextLength - textBox.SelectionLength + 1;
 
             if (newLength > maxLength)
@@ -462,7 +398,6 @@ public partial class RaportUserControl : UserControl
             isValidatingHours = true;
             try
             {
-                // Восстанавливаем предыдущее значение
                 if (previousHoursValues.TryGetValue(changedBox, out var prevValue))
                 {
                     changedBox.Text = prevValue;
@@ -486,7 +421,6 @@ public partial class RaportUserControl : UserControl
         }
         else
         {
-            // Сохраняем корректное значение
             previousHoursValues[changedBox] = changedBox.Text;
         }
     }
@@ -607,21 +541,6 @@ public partial class RaportUserControl : UserControl
         {
             sb.AppendLine();
             sb.AppendLine($"Всего ЗП: {report.TotalSalary} руб.");
-
-            // Показываем распределение минусов если они есть
-            int totalDeductions = report.Employees.Sum(e => e.CashSafeDeduction);
-            if (totalDeductions > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine("==распределение минусов==");
-                foreach (var emp in report.Employees)
-                {
-                    if (emp.CashSafeDeduction > 0)
-                    {
-                        sb.AppendLine($"{emp.Employee?.Name}: -{emp.CashSafeDeduction} руб.");
-                    }
-                }
-            }
         }
 
         return sb.ToString();
@@ -677,12 +596,6 @@ public partial class RaportUserControl : UserControl
         AddEmployeeIfValid(comboBoxSecondNameRaport, textBoxHoursSecondNameRaport, textBoxMinusSecondNameRaport);
         AddEmployeeIfValid(comboBoxThirdNameRaport, textBoxHoursThirdNameRaport, textBoxMinusThirdNameRaport);
 
-        // Сбрасываем вычеты при изменении состава сотрудников
-        foreach (var emp in employeesData)
-        {
-            emp.CashSafeDeduction = 0;
-        }
-
         UpdateListboxSalaryRaport();
     }
 
@@ -719,6 +632,27 @@ public partial class RaportUserControl : UserControl
             control.Invalidate();
             control.Refresh();
         }
+    }
+
+    private void ClearAllFields()
+    {
+        textBoxFactCash.Clear();
+        textBoxFactNonCash.Clear();
+        textBoxProgramCash.Clear();
+        textBoxProgramNonCash.Clear();
+        textBoxSafe.Clear();
+        textBoxWhyMinus.Clear();
+
+        foreach (var comboBox in comboBoxes)
+        {
+            comboBox.SelectedIndex = 0;
+        }
+
+        ClearAllTextBoxes();
+
+        employeesData.Clear();
+        listBoxRaport.Items.Clear();
+        listBoxSendInformation.Items.Clear();
     }
 
     #endregion
@@ -775,7 +709,6 @@ public partial class RaportUserControl : UserControl
             textBox.Clear();
         }
 
-        // Сбрасываем сохраненные значения часов
         foreach (var hoursBox in hoursTextBoxes)
         {
             previousHoursValues[hoursBox] = "0";

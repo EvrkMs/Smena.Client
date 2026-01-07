@@ -1,0 +1,10 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Responses";
+
+package responses;
+
+message BoolResponse {
+  bool value = 1;
+  string message = 2;
+}
