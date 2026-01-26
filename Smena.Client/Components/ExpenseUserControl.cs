@@ -9,7 +9,8 @@ namespace Smena.Client.Components;
 public partial class ExpenseUserControl : UserControl
 {
     private EmployeeService? employeeService;
-    private ExpenseService? _expenseService;
+    private ExpenseService? expenseService;
+    private PhotoService? photoService;
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
 
     public ExpenseUserControl()
@@ -18,13 +19,15 @@ public partial class ExpenseUserControl : UserControl
         SetupDefaultStates();
     }
 
-    public void Initialize(EmployeeService employeeService, ExpenseService _expenseService)
+    public void Initialize(EmployeeService employeeService, ExpenseService expenseService, PhotoService photoService)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
-        ArgumentNullException.ThrowIfNull(_expenseService);
+        ArgumentNullException.ThrowIfNull(expenseService);
+        ArgumentNullException.ThrowIfNull(photoService);
 
         this.employeeService = employeeService;
-        this._expenseService = _expenseService;
+        this.expenseService = expenseService;
+        this.photoService = photoService;
 
         SubscribeToEvents();
     }
@@ -96,7 +99,6 @@ public partial class ExpenseUserControl : UserControl
     {
         if (sender is not MaterialTextBox textBox) return;
 
-        // Для комментария разрешаем всё
         if (textBox == textBoxCommentExpenses)
             return;
 
@@ -118,7 +120,7 @@ public partial class ExpenseUserControl : UserControl
 
     private async void OnSendClick(object? sender, EventArgs e)
     {
-        if (!uint.TryParse(textBoxAmountExpenses.Text, out var amount) || amount <= 0)
+        if (!int.TryParse(textBoxAmountExpenses.Text, out var amount) || amount <= 0)
         {
             MessageBox.Show(
                 "Введите корректную сумму расхода!",
@@ -129,33 +131,29 @@ public partial class ExpenseUserControl : UserControl
             return;
         }
 
-        if (checkBoxPhotoSendExpenses.Checked &&
-            (comboBoxPhotoSendExpenses.SelectedItem is not GrpcEmployee employee ||
-             employee == nullComboBox))
+        GrpcEmployee? selectedEmployee = null;
+        if (checkBoxPhotoSendExpenses.Checked)
         {
-            MessageBox.Show(
-                "Выберите получателя фото!",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-            return;
+            if (comboBoxPhotoSendExpenses.SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
+            {
+                MessageBox.Show(
+                    "Выберите получателя фото!",
+                    "Ошибка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                return;
+            }
+
+            selectedEmployee = employee;
         }
 
-        var request = new GrpcExpenseAdd
-        {
-            Amount = amount,
-            Comment = textBoxCommentExpenses.Text,
-            FromSafe = checkBoxFromSafeExpenses.Checked,
-            SendPhoto = checkBoxPhotoSendExpenses.Checked,
-        };
+        var confirmMessage = $"Добавить расход {amount} руб." +
+                           $"{(checkBoxFromSafeExpenses.Checked ? " (из сейфа)" : "")}?";
 
-        var confirmMessage = $"Добавить расход {request.Amount} руб." +
-                           $"{(request.FromSafe ? " (из сейфа)" : "")}?";
-
-        if (!string.IsNullOrWhiteSpace(request.Comment))
+        if (!string.IsNullOrWhiteSpace(textBoxCommentExpenses.Text))
         {
-            confirmMessage += $"\nКомментарий: {request.Comment}";
+            confirmMessage += $"\nКомментарий: {textBoxCommentExpenses.Text}";
         }
 
         var result = MessageBox.Show(
@@ -169,12 +167,48 @@ public partial class ExpenseUserControl : UserControl
             return;
 
         buttonSendExpenses.Enabled = false;
+        var originalText = buttonSendExpenses.Text;
 
         try
         {
-            var res = await _expenseService!.AddExpenseOperationAsync(request);
+            string? sessionKey = null;
+            if (checkBoxPhotoSendExpenses.Checked && selectedEmployee != null)
+            {
+                var photoResult = await photoService!.RequestPhotosAsync(
+                    selectedEmployee.Id,
+                    message => SetSendStatus(message));
 
-            if (res.Value)
+                if (!photoResult.Success || string.IsNullOrWhiteSpace(photoResult.SessionKey))
+                {
+                    MessageBox.Show(
+                        photoResult.Message,
+                        "Ошибка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                    return;
+                }
+
+                sessionKey = photoResult.SessionKey;
+            }
+
+            bool fromSafe = checkBoxFromSafeExpenses.Checked;
+            bool isNonCash = !fromSafe;
+
+            var request = new GrpcExpenseAdd
+            {
+                Amount = amount,
+                Comment = textBoxCommentExpenses.Text,
+                FromSafe = fromSafe,
+                IsNonCash = isNonCash,
+                SendPhoto = checkBoxPhotoSendExpenses.Checked,
+                PhotoSessionKey = sessionKey ?? string.Empty,
+                SenderName = selectedEmployee?.Name ?? string.Empty
+            };
+
+            var res = await expenseService!.AddExpenseOperationAsync(request);
+
+            if (res.Success)
             {
                 MessageBox.Show(
                     res.Message,
@@ -197,8 +231,20 @@ public partial class ExpenseUserControl : UserControl
         }
         finally
         {
+            buttonSendExpenses.Text = originalText;
             buttonSendExpenses.Enabled = true;
         }
+    }
+
+    private void SetSendStatus(string message)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(() => SetSendStatus(message));
+            return;
+        }
+
+        buttonSendExpenses.Text = message;
     }
 
     private void ClearFields()

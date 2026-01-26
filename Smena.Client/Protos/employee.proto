@@ -2,24 +2,22 @@ syntax = "proto3";
 
 option csharp_namespace = "Host.Grpc.Services.Employee";
 
-import "Protos/import/boolresponse.proto";
-import "Protos/import/emptyrequest.proto";
+import "google/protobuf/empty.proto";
+import "Protos/common.proto";
 
-// Сущность Employee
 message GrpcEmployee {
-    string id = 1;
-    string name = 2;
-    int32 hourlyRate = 3;
+  string id = 1;
+  string name = 2;
+  int32 hourly_rate = 3;
+  int64 telegram_id = 4;
+  int32 salary_thread_id = 5;
 }
 
-// Ответ со списком
 message GrpcEmployeesResponse {
-    repeated GrpcEmployee employees = 1;
+  repeated GrpcEmployee employees = 1;
 }
 
-// Сервис
 service GrpcEmployeeService {
-    rpc EmployeesList(requests.EmptyRequest) returns (GrpcEmployeesResponse);
-
-    rpc EmployeeAdd(GrpcEmployee) returns (responses.BoolResponse);
+  rpc EmployeesList(google.protobuf.Empty) returns (GrpcEmployeesResponse);
+  rpc EmployeeAdd(GrpcEmployee) returns (BoolResponse);
 }

@@ -2,12 +2,10 @@ syntax = "proto3";
 
 option csharp_namespace = "Host.Grpc.Services.Advance";
 
-package advance;
-
-import "Protos/import/boolresponse.proto";
+import "Protos/common.proto";
 
 service GrpcAdvanceService {
-  rpc SendAdvance(GrpcAdvanceRequest) returns (responses.BoolResponse);
+  rpc SendAdvance(GrpcAdvanceRequest) returns (BoolResponse);
 }
 
 message GrpcAdvanceRequest {
@@ -16,4 +14,5 @@ message GrpcAdvanceRequest {
   bool is_non_cash = 3;
   bool is_salary = 4;
   bool extract_from_safe = 5;
+  string comment = 6;
 }

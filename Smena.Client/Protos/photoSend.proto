@@ -1,38 +1,46 @@
 syntax = "proto3";
+
 option csharp_namespace = "Host.Grpc.Services.SendPhoto";
-package send_photo;
 
 service SendPhotoService {
-    rpc RequestPhotos(RequestPhotosRequest) returns (stream PhotoStatusUpdate);
+  rpc RequestPhotos(RequestPhotosRequest) returns (stream PhotoStatusUpdate);
 }
 
 message RequestPhotosRequest {
-    string employee_telegram_id = 1;  // chatId кому слать запрос
-    int32 expected_photos = 2;        // сколько ожидать
+  string employee_id = 1;
 }
 
 message PhotoStatusUpdate {
-    oneof status {
-        PhotoRequestSent request_sent = 1;
-        PhotosReceived photos_received = 2;
-        PhotosReady photos_ready = 3;
-        PhotosTimeout timeout = 4;
-        Error error = 5;
-    }
+  oneof status {
+    PhotoStart start = 1;
+    PhotoRequestSent request_sent = 2;
+    PhotosReceived photos_received = 3;
+    PhotosReady photos_ready = 4;
+    PhotosTimeout timeout = 5;
+    Error error = 6;
+  }
+}
+
+message PhotoStart {
+  string message = 1;
 }
 
 message PhotoRequestSent {
-    string message = 1;  // "ќжидаю фото..."
+  string message = 1;
 }
 
 message PhotosReceived {
-    int32 received_count = 1;
-    int32 expected_count = 2;
+  int32 received_count = 1;
 }
 
 message PhotosReady {
-    string session_key = 1;  // "ABC123" дл€ Expense
+  string session_key = 1;
 }
 
-message PhotosTimeout { }
-message Error { string message = 1; }
+message PhotosTimeout {
+  string message = 1;
+}
+
+message Error {
+  string message = 1;
+}

@@ -1,5 +1,4 @@
 ﻿using Grpc.Core;
-using Grpc.Net.Client;
 using Host.Grpc.Services.Inventory;
 
 namespace Smena.Client.Services;
@@ -8,9 +7,9 @@ public class InventoryService
 {
     private readonly GrpcInventoryService.GrpcInventoryServiceClient _client;
 
-    public InventoryService(GrpcChannel channel)
+    public InventoryService(GrpcService grpcService)
     {
-        _client = new(channel);
+        _client = new(grpcService.CallInvoker);
     }
 
     public async Task<(bool Success, string Message)> SendInventoryAsync(GrpcInventoryRequest request)
@@ -18,15 +17,15 @@ public class InventoryService
         try
         {
             var response = await _client.SendInventoryAsync(request);
-            return (response.Value, response.Message);
+            return (response.Success, response.Message);
         }
         catch (RpcException ex)
         {
-            return (false, $"gRPC ошибка: {ex.StatusCode} - {ex.Message}");
+            return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
         }
         catch (Exception ex)
         {
-            return (false, $"Ошибка: {ex.Message}");
+            return (false, $"Error: {ex.Message}");
         }
     }
 }

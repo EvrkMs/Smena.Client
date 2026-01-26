@@ -49,6 +49,7 @@ public partial class RaportUserControl : UserControl
     private EmployeeService? employeeService;
     private SafeService? safeService;
     private RaportService? raportService;
+    private PhotoService? photoService;
     private readonly List<ComboBox> comboBoxes = [];
     private readonly List<MaterialTextBox> hoursTextBoxes = [];
     private readonly List<MaterialTextBox> minusTextBoxes = [];
@@ -56,6 +57,7 @@ public partial class RaportUserControl : UserControl
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
     private readonly BindingList<EmployeeHoursList> employeesData = [];
     private bool isUpdating = false;
+    private bool isNormalizingInput = false;
     private readonly Dictionary<MaterialTextBox, string> previousHoursValues = [];
     private bool isValidatingHours = false;
 
@@ -73,15 +75,17 @@ public partial class RaportUserControl : UserControl
 
     #region Public API
 
-    public void Initialize(EmployeeService employeeService, SafeService safeService, RaportService raportService)
+    public void Initialize(EmployeeService employeeService, SafeService safeService, RaportService raportService, PhotoService photoService)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
         ArgumentNullException.ThrowIfNull(safeService);
         ArgumentNullException.ThrowIfNull(raportService);
+        ArgumentNullException.ThrowIfNull(photoService);
 
         this.employeeService = employeeService;
         this.safeService = safeService;
         this.raportService = raportService;
+        this.photoService = photoService;
 
         SubscribeToEvents();
     }
@@ -115,8 +119,8 @@ public partial class RaportUserControl : UserControl
         };
         report.NewSafe = report.FactSafe + (report.FactCash - ReportData.InitialCash);
 
-        int safeDiscrepancy = report.FactSafe - (int)report.ProgramSafe;
-        report.SafeDiscrepancy = safeDiscrepancy > 0 ? 0 : safeDiscrepancy;
+        int expectedSafe = (int)report.ProgramSafe + (report.FactCash - ReportData.InitialCash);
+        report.SafeDiscrepancy = report.FactSafe - expectedSafe;
 
         report.Revenue = (report.FactCash - ReportData.InitialCash) + report.FactNonCash;
         report.TotalSalary = employeesData.Sum(e => e.Salary);
@@ -174,8 +178,21 @@ public partial class RaportUserControl : UserControl
 
         // Показываем подтверждение с итоговыми данными
         var totalMinusCash = Math.Abs(report.CashDiscrepancy);
-        var totalMinusSafe = Math.Abs(report.SafeDiscrepancy);
+        var totalMinusSafe = report.SafeDiscrepancy < 0 ? -report.SafeDiscrepancy : 0;
         var totalMinusEntered = employeesData.Sum(e => e.Minus);
+        var totalMinusExpected = totalMinusCash + totalMinusSafe;
+
+        if (totalMinusEntered != totalMinusExpected)
+        {
+            MessageBox.Show(
+                $"Сумма минусов должна быть равна {totalMinusExpected} руб.\n" +
+                $"Указано минусов: {totalMinusEntered} руб.",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
 
         var confirmMessage = $"Отчёт за смену:\n\n" +
                            $"Выручка: {report.Revenue} руб.\n" +
@@ -202,6 +219,37 @@ public partial class RaportUserControl : UserControl
         if (result != DialogResult.Yes)
             return;
 
+        listBoxSendInformation.Items.Clear();
+        string? photoSessionKey = null;
+        var firstEmployee = employeesData.FirstOrDefault()?.Employee;
+        if (firstEmployee == null)
+        {
+            MessageBox.Show(
+                "Выберите первого сотрудника для получения фото.",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
+
+        var photoResult = await photoService!.RequestPhotosAsync(
+            firstEmployee.Id,
+            message => AddSendInfo(message));
+
+        if (!photoResult.Success || string.IsNullOrWhiteSpace(photoResult.SessionKey))
+        {
+            MessageBox.Show(
+                photoResult.Message,
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
+
+        photoSessionKey = photoResult.SessionKey;
+
         var request = new GrpcRaportRequest
         {
             FactCash = report.FactCash,
@@ -209,7 +257,9 @@ public partial class RaportUserControl : UserControl
             ProgramCash = report.ProgramCash,
             ProgramNonCash = report.ProgramNonCash,
             FactSafe = report.FactSafe,
-            WhyMinus = textBoxWhyMinus.Text
+            WhyMinus = textBoxWhyMinus.Text,
+            SendPhoto = true,
+            PhotoSessionKey = photoSessionKey ?? string.Empty
         };
 
         foreach (var emp in report.Employees)
@@ -316,6 +366,7 @@ public partial class RaportUserControl : UserControl
         foreach (var textBox in numericTextBoxes)
         {
             textBox.KeyPress += FilterNumericInput;
+            textBox.TextChanged += NormalizeNumericInput;
             textBox.TextChanged += DataSalaryRaport;
             textBox.TextChanged += UpdateReportPreview;
         }
@@ -344,6 +395,7 @@ public partial class RaportUserControl : UserControl
         foreach (var textBox in numericTextBoxes)
         {
             textBox.KeyPress -= FilterNumericInput;
+            textBox.TextChanged -= NormalizeNumericInput;
             textBox.TextChanged -= DataSalaryRaport;
             textBox.TextChanged -= UpdateReportPreview;
         }
@@ -375,6 +427,33 @@ public partial class RaportUserControl : UserControl
             {
                 e.Handled = true;
             }
+        }
+    }
+
+    private void NormalizeNumericInput(object? sender, EventArgs e)
+    {
+        if (isNormalizingInput || sender is not MaterialTextBox textBox)
+        {
+            return;
+        }
+
+        var text = textBox.Text ?? string.Empty;
+        var digitsOnly = new string(text.Where(char.IsDigit).ToArray());
+
+        if (digitsOnly == text)
+        {
+            return;
+        }
+
+        isNormalizingInput = true;
+        try
+        {
+            textBox.Text = digitsOnly;
+            textBox.SelectionStart = digitsOnly.Length;
+        }
+        finally
+        {
+            isNormalizingInput = false;
         }
     }
 
@@ -515,7 +594,18 @@ public partial class RaportUserControl : UserControl
         }
     }
 
-    private string FormatReportPreview(ReportData report)
+    
+    private void AddSendInfo(string message)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(() => AddSendInfo(message));
+            return;
+        }
+
+        listBoxSendInformation.Items.Add(message);
+    }
+private string FormatReportPreview(ReportData report)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -747,3 +837,5 @@ public partial class RaportUserControl : UserControl
 
     #endregion
 }
+
+

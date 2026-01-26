@@ -43,10 +43,7 @@ public partial class AdvanceUserControl : UserControl
 
     private void SetupDefaultStates()
     {
-        // Б/Н по умолчанию выключен
         checkBoxExtractSalaryFromSafe.Checked = false;
-
-        // Аванс по умолчанию включен
         checkBoxAdvanceExtract.Checked = true;
         checkBoxSalaryAdvance.Checked = false;
     }
@@ -63,7 +60,6 @@ public partial class AdvanceUserControl : UserControl
         textBoxSalaryExtractAmount.KeyPress += FilterNumericInput;
         checkBoxExtractSalaryFromSafe.CheckedChanged += OnBezNalChanged;
 
-        // Только один checkbox может быть активен
         checkBoxAdvanceExtract.CheckedChanged += (s, e) =>
         {
             if (checkBoxAdvanceExtract.Checked)
@@ -79,8 +75,6 @@ public partial class AdvanceUserControl : UserControl
 
     private void OnBezNalChanged(object? sender, EventArgs e)
     {
-        // Если Б/Н включен, то не списываем с сейфа
-        // Визуальная подсказка пользователю
         buttonSendExtractSalary.Text = checkBoxExtractSalaryFromSafe.Checked
             ? "Отправить (Б/Н)"
             : "Отправить (из сейфа)";
@@ -143,9 +137,7 @@ public partial class AdvanceUserControl : UserControl
 
     private async void OnSendClick(object? sender, EventArgs e)
     {
-        // Валидация
-        if (comboBoxExtractSalaryName.SelectedItem is not GrpcEmployee employee ||
-            employee == nullComboBox)
+        if (comboBoxExtractSalaryName.SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
         {
             MessageBox.Show(
                 "Выберите сотрудника!",
@@ -167,17 +159,17 @@ public partial class AdvanceUserControl : UserControl
             return;
         }
 
-        // Подготовка запроса
+        var isNonCash = checkBoxExtractSalaryFromSafe.Checked;
         var request = new GrpcAdvanceRequest
         {
             EmployeeId = employee.Id,
             Amount = amount,
-            IsNonCash = checkBoxExtractSalaryFromSafe.Checked,
+            IsNonCash = isNonCash,
             IsSalary = checkBoxSalaryAdvance.Checked,
-            ExtractFromSafe = !checkBoxExtractSalaryFromSafe.Checked
+            ExtractFromSafe = !isNonCash,
+            Comment = checkBoxSalaryAdvance.Checked ? "ЗП" : "Аванс"
         };
 
-        // Подтверждение
         var confirmMessage = $"Выплатить {(request.IsSalary ? "ЗП" : "аванс")} " +
                            $"{request.Amount} руб. сотруднику {employee.Name}" +
                            $"{(request.IsNonCash ? " (Б/Н)" : " (из сейфа)")}?";
@@ -192,7 +184,6 @@ public partial class AdvanceUserControl : UserControl
         if (result != DialogResult.Yes)
             return;
 
-        // Отправка
         buttonSendExtractSalary.Enabled = false;
 
         try

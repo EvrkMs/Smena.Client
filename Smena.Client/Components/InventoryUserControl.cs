@@ -55,7 +55,6 @@ public partial class InventoryUserControl : UserControl
 
     private void OnAmountChanged(object? sender, EventArgs e)
     {
-        // Обновляем текст кнопки с показом суммы на человека
         if (int.TryParse(textBoxAmountInventory.Text, out var totalAmount) &&
             totalAmount > 0 &&
             listBoxNameInventory.SelectedItems.Count > 0)
@@ -95,7 +94,6 @@ public partial class InventoryUserControl : UserControl
             listBoxNameInventory.Items.Add(employee);
         }
 
-        // Восстанавливаем выбранные элементы
         foreach (var index in selectedIndices)
         {
             if (index < listBoxNameInventory.Items.Count)
@@ -152,14 +150,13 @@ public partial class InventoryUserControl : UserControl
         var employeesCount = listBoxNameInventory.SelectedItems.Count;
         var amountPerEmployee = totalAmount / employeesCount;
 
-        // Проверяем, что сумма делится нацело
         if (totalAmount % employeesCount != 0)
         {
             var remainder = totalAmount % employeesCount;
             MessageBox.Show(
                 $"Сумма {totalAmount} не делится нацело на {employeesCount} сотрудников. " +
                 $"Остаток: {remainder} руб.\n\n" +
-                $"Измените сумму или количество сотрудников.",
+                "Измените сумму или количество сотрудников.",
                 "Внимание",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning
@@ -169,17 +166,15 @@ public partial class InventoryUserControl : UserControl
 
         var request = new GrpcInventoryRequest
         {
-            TotalAmount = totalAmount
+            TotalAmount = totalAmount,
+            Comment = string.Empty
         };
 
         var selectedEmployees = new List<string>();
 
         foreach (GrpcEmployee employee in listBoxNameInventory.SelectedItems)
         {
-            request.Employees.Add(new EmployeeInventory
-            {
-                EmployeeId = employee.Id
-            });
+            request.EmployeeIds.Add(employee.Id);
             selectedEmployees.Add(employee.Name);
         }
 

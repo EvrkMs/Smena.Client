@@ -1,21 +1,19 @@
-﻿using Grpc.Core;
-using Grpc.Net.Client;
+﻿using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
+using Host.Grpc.Common;
 using Host.Grpc.Services.Employee;
-using Host.Grpc.Services.Requests;
 using System.ComponentModel;
 
 namespace Smena.Client.Services;
 
 public class EmployeeService
 {
-    private readonly GrpcEmployeeService.GrpcEmployeeServiceClient Client;
-    public BindingList<GrpcEmployee> Employees { get; private set; } = [];
+    private readonly GrpcEmployeeService.GrpcEmployeeServiceClient _client;
+    public BindingList<GrpcEmployee> Employees { get; } = [];
 
-
-    public EmployeeService(GrpcChannel _channel)
+    public EmployeeService(GrpcService grpcService)
     {
-        Client = new(_channel);
-
+        _client = new(grpcService.CallInvoker);
         _ = LoadOrReloadListAsync();
     }
 
@@ -23,8 +21,7 @@ public class EmployeeService
     {
         try
         {
-            var response = await Client.EmployeesListAsync(new EmptyRequest());
-
+            var response = await _client.EmployeesListAsync(new Empty());
             if (response?.Employees == null) return;
 
             Employees.Clear();
@@ -44,12 +41,13 @@ public class EmployeeService
     {
         try
         {
-            var res = await Client.EmployeeAddAsync(employee);
-            if (res == null)
+            var res = await _client.EmployeeAddAsync(employee);
+            if (res == null || !res.Success)
             {
-                MessageBox.Show("Ошибка: создание сотрудника вернуло null");
+                MessageBox.Show(res?.Message ?? "Server returned empty response");
                 return false;
             }
+
             await LoadOrReloadListAsync();
             return true;
         }

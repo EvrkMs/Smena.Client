@@ -1,5 +1,4 @@
 ﻿using Grpc.Core;
-using Grpc.Net.Client;
 using Host.Grpc.Services.Advance;
 
 namespace Smena.Client.Services;
@@ -8,9 +7,9 @@ public class AdvanceService
 {
     private readonly GrpcAdvanceService.GrpcAdvanceServiceClient _client;
 
-    public AdvanceService(GrpcChannel channel)
+    public AdvanceService(GrpcService grpcService)
     {
-        _client = new(channel);
+        _client = new(grpcService.CallInvoker);
     }
 
     public async Task<(bool Success, string Message)> SendAdvanceAsync(GrpcAdvanceRequest request)
@@ -18,15 +17,15 @@ public class AdvanceService
         try
         {
             var response = await _client.SendAdvanceAsync(request);
-            return (response.Value, response.Message);
+            return (response.Success, response.Message);
         }
         catch (RpcException ex)
         {
-            return (false, $"gRPC ошибка: {ex.StatusCode} - {ex.Message}");
+            return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
         }
         catch (Exception ex)
         {
-            return (false, $"Ошибка: {ex.Message}");
+            return (false, $"Error: {ex.Message}");
         }
     }
 }

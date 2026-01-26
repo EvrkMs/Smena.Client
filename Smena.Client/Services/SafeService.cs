@@ -1,40 +1,33 @@
-﻿using Grpc.Net.Client;
-using Host.Grpc.Services.Requests;
-using Host.Grpc.Services.Responses;
+﻿using Google.Protobuf.WellKnownTypes;
+using Host.Grpc.Common;
 using Host.Grpc.Services.Safe;
 
 namespace Smena.Client.Services;
 
-public class SafeService(GrpcChannel _channel)
+public class SafeService(GrpcService grpcService)
 {
-    private readonly GrpcSafeService.GrpcSafeServiceClient Client = new(_channel);
-    public long CurrentSafe => LoadOrReloadCurrentSafe();
+    private readonly GrpcSafeService.GrpcSafeServiceClient _client = new(grpcService.CallInvoker);
 
     public event EventHandler<long>? SafeChanged;
 
+    public long CurrentSafe => LoadOrReloadCurrentSafe();
+
     public long LoadOrReloadCurrentSafe()
     {
-        var amount = Client.CurrentSafe(new EmptyRequest());
-
+        var amount = _client.CurrentSafe(new Empty());
         return amount.Current;
     }
 
-    public async Task<BoolResponse> AddOperationSafeAsync(GrpcSafeOperation req, CancellationToken ct = default)
+    public async Task<BoolResponse> AddOperationSafeAsync(SafeOperationAdd req, CancellationToken ct = default)
     {
         try
         {
-            var call = await Client.SafeOperationAsync(req, cancellationToken: ct);
-
-            if (call == null)
-            {
-                return new BoolResponse() { Value = false, Message = "Сервер не дал ответ" };
-            }
-
-            return new BoolResponse() { Value = true };
+            var call = await _client.AddSafeOperationAsync(req, cancellationToken: ct);
+            return call ?? new BoolResponse { Success = false, Message = "Server did not respond." };
         }
         catch (Exception ex)
         {
-            return new BoolResponse() { Value = false, Message = ex.Message };
+            return new BoolResponse { Success = false, Message = ex.Message };
         }
     }
 }

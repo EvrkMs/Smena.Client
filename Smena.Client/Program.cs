@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Windows.Forms;
 
@@ -8,6 +9,16 @@ internal static class Program
 	[STAThread]
 	private static void Main()
 	{
-		Application.Run(new MainForm());
+		var config = new ConfigurationBuilder()
+			.SetBasePath(AppContext.BaseDirectory)
+			.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+			.AddEnvironmentVariables()
+			.Build();
+
+		var address = config["Grpc:Address"] ?? "http://localhost:5001";
+		var apiKey = config["Grpc:ApiKey"] ?? string.Empty;
+
+		var grpcService = new GrpcService(address, apiKey);
+		Application.Run(new MainForm(grpcService));
 	}
 }

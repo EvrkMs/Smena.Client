@@ -1,27 +1,26 @@
 ﻿using Grpc.Core;
-using Grpc.Net.Client;
 using Host.Grpc.Services.Raport;
 
 namespace Smena.Client.Services;
 
-public class RaportService(GrpcChannel channel)
+public class RaportService(GrpcService grpcService)
 {
-    private readonly GrpcRaportService.GrpcRaportServiceClient _client = new(channel);
+    private readonly GrpcRaportService.GrpcRaportServiceClient _client = new(grpcService.CallInvoker);
 
     public async Task<(bool Success, string Message)> SendRaportAsync(GrpcRaportRequest request)
     {
         try
         {
             var response = await _client.SendRaportAsync(request);
-            return (response.Value, response.Message);
+            return (response.Success, response.Message);
         }
         catch (RpcException ex)
         {
-            return (false, $"gRPC ошибка: {ex.StatusCode} - {ex.Message}");
+            return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
         }
         catch (Exception ex)
         {
-            return (false, $"Ошибка: {ex.Message}");
+            return (false, $"Error: {ex.Message}");
         }
     }
 }

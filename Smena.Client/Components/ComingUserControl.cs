@@ -17,7 +17,7 @@ public partial class ComingUserControl : UserControl
     {
         ArgumentNullException.ThrowIfNull(safeService);
 
-        this._safeService = safeService;
+        _safeService = safeService;
         SubscribeToEvents();
     }
 
@@ -37,7 +37,6 @@ public partial class ComingUserControl : UserControl
     {
         if (sender is not MaterialTextBox textBox) return;
 
-        // Для комментария разрешаем всё
         if (textBox == textBoxCommentPlusAmount)
             return;
 
@@ -59,7 +58,7 @@ public partial class ComingUserControl : UserControl
 
     private async void OnSendClick(object? sender, EventArgs e)
     {
-        if (!uint.TryParse(textBoxAmountPlusSafe.Text, out var amount) || amount <= 0)
+        if (!int.TryParse(textBoxAmountPlusSafe.Text, out var amount) || amount <= 0)
         {
             MessageBox.Show(
                 "Введите корректную сумму прихода!",
@@ -70,10 +69,11 @@ public partial class ComingUserControl : UserControl
             return;
         }
 
-        var request = new GrpcSafeOperation
+        var request = new SafeOperationAdd
         {
             Amount = amount,
-            Comment = textBoxCommentPlusAmount.Text
+            Comment = textBoxCommentPlusAmount.Text,
+            Type = SafeOperationTypeGrpc.Coming
         };
 
         var confirmMessage = $"Добавить приход {request.Amount} руб. в сейф?";
@@ -99,7 +99,7 @@ public partial class ComingUserControl : UserControl
         {
             var respons = await _safeService!.AddOperationSafeAsync(request);
 
-            if (respons.Value)
+            if (respons.Success)
             {
                 MessageBox.Show(
                     respons.Message,
