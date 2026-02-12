@@ -4,11 +4,12 @@ using System.Net.Http;
 
 namespace Smena.Client;
 
-public class GrpcService
+public class GrpcService : IDisposable, IAsyncDisposable
 {
     public GrpcChannel Channel { get; }
     public CallInvoker CallInvoker { get; }
     private readonly HttpClient _httpClient;
+    private bool _disposed;
 
     public GrpcService(string address, string apiKey)
     {
@@ -23,5 +24,19 @@ public class GrpcService
             HttpClient = _httpClient
         });
         CallInvoker = Channel.CreateCallInvoker();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Channel.Dispose();
+        _httpClient.Dispose();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 }

@@ -58,6 +58,8 @@ internal partial class MainForm : MaterialForm
         expenseUserControl1.UnsubscribeFromEvents();
         comingUserControl1.UnsubscribeFromEvents();
         inventoryUserControl1.UnsubscribeFromEvents();
+        safeService.Dispose();
+        grpcService.Dispose();
 
         base.OnFormClosed(e);
     }

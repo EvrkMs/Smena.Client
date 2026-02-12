@@ -23,5 +23,6 @@ message CurrentSafeResponse {
 
 service GrpcSafeService {
   rpc CurrentSafe(google.protobuf.Empty) returns (CurrentSafeResponse);
+  rpc SubscribeSafe(google.protobuf.Empty) returns (stream CurrentSafeResponse);
   rpc AddSafeOperation(SafeOperationAdd) returns (BoolResponse);
 }

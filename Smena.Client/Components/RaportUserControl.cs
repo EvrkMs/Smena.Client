@@ -119,8 +119,8 @@ public partial class RaportUserControl : UserControl
         };
         report.NewSafe = report.FactSafe + (report.FactCash - ReportData.InitialCash);
 
-        int expectedSafe = (int)report.ProgramSafe + (report.FactCash - ReportData.InitialCash);
-        report.SafeDiscrepancy = report.FactSafe - expectedSafe;
+        int safeDiscrepancy = report.FactSafe - (int)report.ProgramSafe;
+        report.SafeDiscrepancy = safeDiscrepancy > 0 ? 0 : safeDiscrepancy;
 
         report.Revenue = (report.FactCash - ReportData.InitialCash) + report.FactNonCash;
         report.TotalSalary = employeesData.Sum(e => e.Salary);
@@ -148,6 +148,12 @@ public partial class RaportUserControl : UserControl
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             );
+            return;
+        }
+
+        var report = GenerateReport();
+        if (!ValidateMinusTotals(report, showMessage: true))
+        {
             return;
         }
 
@@ -182,15 +188,8 @@ public partial class RaportUserControl : UserControl
         var totalMinusEntered = employeesData.Sum(e => e.Minus);
         var totalMinusExpected = totalMinusCash + totalMinusSafe;
 
-        if (totalMinusEntered != totalMinusExpected)
+        if (!ValidateMinusTotals(report, showMessage: true))
         {
-            MessageBox.Show(
-                $"Сумма минусов должна быть равна {totalMinusExpected} руб.\n" +
-                $"Указано минусов: {totalMinusEntered} руб.",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
             return;
         }
 
@@ -233,50 +232,50 @@ public partial class RaportUserControl : UserControl
             return;
         }
 
-        var photoResult = await photoService!.RequestPhotosAsync(
-            firstEmployee.Id,
-            message => AddSendInfo(message));
-
-        if (!photoResult.Success || string.IsNullOrWhiteSpace(photoResult.SessionKey))
-        {
-            MessageBox.Show(
-                photoResult.Message,
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-            return;
-        }
-
-        photoSessionKey = photoResult.SessionKey;
-
-        var request = new GrpcRaportRequest
-        {
-            FactCash = report.FactCash,
-            FactNonCash = report.FactNonCash,
-            ProgramCash = report.ProgramCash,
-            ProgramNonCash = report.ProgramNonCash,
-            FactSafe = report.FactSafe,
-            WhyMinus = textBoxWhyMinus.Text,
-            SendPhoto = true,
-            PhotoSessionKey = photoSessionKey ?? string.Empty
-        };
-
-        foreach (var emp in report.Employees)
-        {
-            request.Employees.Add(new EmployeeRaportSalary
-            {
-                EmployeeId = emp.Employee?.Id ?? "",
-                Hours = emp.Hours,
-                Minus = emp.Minus,
-            });
-        }
-
         buttonSend.Enabled = false;
         buttonСalculate.Enabled = false;
 
         try
         {
+            var photoResult = await photoService!.RequestPhotosAsync(
+                firstEmployee.Id,
+                message => AddSendInfo(message));
+
+            if (!photoResult.Success || string.IsNullOrWhiteSpace(photoResult.SessionKey))
+            {
+                MessageBox.Show(
+                    photoResult.Message,
+                    "Ошибка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                return;
+            }
+
+            photoSessionKey = photoResult.SessionKey;
+
+            var request = new GrpcRaportRequest
+            {
+                FactCash = report.FactCash,
+                FactNonCash = report.FactNonCash,
+                ProgramCash = report.ProgramCash,
+                ProgramNonCash = report.ProgramNonCash,
+                FactSafe = report.FactSafe,
+                WhyMinus = textBoxWhyMinus.Text,
+                SendPhoto = true,
+                PhotoSessionKey = photoSessionKey ?? string.Empty
+            };
+
+            foreach (var emp in report.Employees)
+            {
+                request.Employees.Add(new EmployeeRaportSalary
+                {
+                    EmployeeId = emp.Employee?.Id ?? "",
+                    Hours = emp.Hours,
+                    Minus = emp.Minus,
+                });
+            }
+
             var (success, message) = await raportService!.SendRaportAsync(request);
 
             if (success)
@@ -605,7 +604,7 @@ public partial class RaportUserControl : UserControl
 
         listBoxSendInformation.Items.Add(message);
     }
-private string FormatReportPreview(ReportData report)
+    private string FormatReportPreview(ReportData report)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -634,6 +633,32 @@ private string FormatReportPreview(ReportData report)
         }
 
         return sb.ToString();
+    }
+
+    private bool ValidateMinusTotals(ReportData report, bool showMessage)
+    {
+        var totalMinusCash = Math.Abs(report.CashDiscrepancy);
+        var totalMinusSafe = report.SafeDiscrepancy < 0 ? -report.SafeDiscrepancy : 0;
+        var totalMinusEntered = employeesData.Sum(e => e.Minus);
+        var totalMinusExpected = totalMinusCash + totalMinusSafe;
+
+        if (totalMinusEntered == totalMinusExpected)
+        {
+            return true;
+        }
+
+        if (showMessage)
+        {
+            MessageBox.Show(
+                $"Сумма минусов должна быть равна {totalMinusExpected} руб.\n" +
+                $"Указано минусов: {totalMinusEntered} руб.",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+        }
+
+        return false;
     }
 
     private int GetEmployeeIndex(Control? control)
