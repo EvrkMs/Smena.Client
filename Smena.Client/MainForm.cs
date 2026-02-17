@@ -13,7 +13,6 @@ internal partial class MainForm : MaterialForm
     private readonly RaportService raportService;
     private readonly AdvanceService advanceService;
     private readonly ExpenseService expenseService;
-    private readonly InventoryService inventoryService;
     private readonly PhotoService photoService;
     private readonly GrpcService grpcService;
 
@@ -26,7 +25,6 @@ internal partial class MainForm : MaterialForm
         raportService = new(grpcService);
         advanceService = new(grpcService);
         expenseService = new(grpcService);
-        inventoryService = new(grpcService);
         photoService = new(grpcService);
 
         InitializeComponent();
@@ -35,7 +33,6 @@ internal partial class MainForm : MaterialForm
         advanceUserControl1.Initialize(employeeService, advanceService);
         expenseUserControl1.Initialize(employeeService, expenseService, photoService);
         comingUserControl1.Initialize(safeService);
-        inventoryUserControl1.Initialize(employeeService, inventoryService);
         AddEmployeesTab();
 
         materialSkinManager = MaterialSkinManager.Instance;
@@ -57,7 +54,6 @@ internal partial class MainForm : MaterialForm
         advanceUserControl1.UnsubscribeFromEvents();
         expenseUserControl1.UnsubscribeFromEvents();
         comingUserControl1.UnsubscribeFromEvents();
-        inventoryUserControl1.UnsubscribeFromEvents();
         safeService.Dispose();
         grpcService.Dispose();
 

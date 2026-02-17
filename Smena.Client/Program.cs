@@ -16,7 +16,11 @@ internal static class Program
 			.Build();
 
 		var address = config["Grpc:Address"] ?? "http://localhost:5001";
-		var apiKey = config["Grpc:ApiKey"] ?? string.Empty;
+		var apiKey =
+			Environment.GetEnvironmentVariable("AVA_SMENA_API_KEY") ??
+			Environment.GetEnvironmentVariable("Grpc__ApiKey") ??
+			config["Grpc:ApiKey"] ??
+			string.Empty;
 
 		var grpcService = new GrpcService(address, apiKey);
 		Application.Run(new MainForm(grpcService));

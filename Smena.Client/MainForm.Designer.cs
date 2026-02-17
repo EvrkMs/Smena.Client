@@ -46,14 +46,11 @@ namespace Smena.Client
             expenseUserControl1 = new Smena.Client.Components.ExpenseUserControl();
             tabPlusSafe = new TabPage();
             comingUserControl1 = new Smena.Client.Components.ComingUserControl();
-            tabInventory = new TabPage();
-            inventoryUserControl1 = new Smena.Client.Components.InventoryUserControl();
             materialTabControl1.SuspendLayout();
             tabRaport.SuspendLayout();
             tabAdvance.SuspendLayout();
             tabExpenses.SuspendLayout();
             tabPlusSafe.SuspendLayout();
-            tabInventory.SuspendLayout();
             SuspendLayout();
             // 
             // materialTabSelector1
@@ -76,7 +73,6 @@ namespace Smena.Client
             materialTabControl1.Controls.Add(tabAdvance);
             materialTabControl1.Controls.Add(tabExpenses);
             materialTabControl1.Controls.Add(tabPlusSafe);
-            materialTabControl1.Controls.Add(tabInventory);
             materialTabControl1.Depth = 0;
             materialTabControl1.Dock = DockStyle.Fill;
             materialTabControl1.Location = new Point(3, 64);
@@ -165,25 +161,6 @@ namespace Smena.Client
             comingUserControl1.Size = new Size(1282, 716);
             comingUserControl1.TabIndex = 0;
             // 
-            // tabInventory
-            // 
-            tabInventory.BackColor = Color.FromArgb(64, 0, 64);
-            tabInventory.Controls.Add(inventoryUserControl1);
-            tabInventory.Location = new Point(4, 24);
-            tabInventory.Name = "tabInventory";
-            tabInventory.Size = new Size(1282, 716);
-            tabInventory.TabIndex = 4;
-            tabInventory.Text = "Инвентаризация";
-            // 
-            // inventoryUserControl1
-            // 
-            inventoryUserControl1.BackColor = Color.Transparent;
-            inventoryUserControl1.Dock = DockStyle.Fill;
-            inventoryUserControl1.Location = new Point(0, 0);
-            inventoryUserControl1.Name = "inventoryUserControl1";
-            inventoryUserControl1.Size = new Size(1282, 716);
-            inventoryUserControl1.TabIndex = 0;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -200,7 +177,6 @@ namespace Smena.Client
             tabAdvance.ResumeLayout(false);
             tabExpenses.ResumeLayout(false);
             tabPlusSafe.ResumeLayout(false);
-            tabInventory.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -212,13 +188,11 @@ namespace Smena.Client
         private TabPage tabAdvance;
         private TabPage tabExpenses;
         private TabPage tabPlusSafe;
-        private TabPage tabInventory;
 
         private MaterialSkinManager materialSkinManager;
         private Components.RaportUserControl raportUserControl;
         private Components.AdvanceUserControl advanceUserControl1;
         private Components.ExpenseUserControl expenseUserControl1;
         private Components.ComingUserControl comingUserControl1;
-        private Components.InventoryUserControl inventoryUserControl1;
     }
 }
