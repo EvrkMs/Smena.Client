@@ -14,7 +14,7 @@ public partial class RaportUserControl : UserControl
         public GrpcEmployee? Employee { get; set; }
         public int Hours { get; set; }
         public int Minus { get; set; }
-        public int HourlyRate => Employee.HourlyRate; // Дефолтное значение
+        public int HourlyRate => Employee?.HourlyRate ?? 0;
         public int Salary => (Hours * HourlyRate) - Minus;
 
         public string SalaryInfo => this.ToString();
@@ -59,7 +59,9 @@ public partial class RaportUserControl : UserControl
     private bool isUpdating = false;
     private bool isNormalizingInput = false;
     private readonly Dictionary<MaterialTextBox, string> previousHoursValues = [];
+    private readonly Dictionary<string, int> employeeSalaryCache = new(StringComparer.Ordinal);
     private bool isValidatingHours = false;
+    private bool isValidatingMinus = false;
 
     #endregion
 
@@ -138,7 +140,7 @@ public partial class RaportUserControl : UserControl
 
     #region Event Handlers
 
-    private void OnCalculateClick(object? sender, EventArgs e)
+    private async void OnCalculateClick(object? sender, EventArgs e)
     {
         if (employeesData.Count == 0)
         {
@@ -153,6 +155,11 @@ public partial class RaportUserControl : UserControl
 
         var report = GenerateReport();
         if (!ValidateMinusTotals(report, showMessage: true))
+        {
+            return;
+        }
+
+        if (!await ValidateEmployeeMinusRulesAsync(showMessage: true))
         {
             return;
         }
@@ -189,6 +196,11 @@ public partial class RaportUserControl : UserControl
         var totalMinusExpected = totalMinusCash + totalMinusSafe;
 
         if (!ValidateMinusTotals(report, showMessage: true))
+        {
+            return;
+        }
+
+        if (!await ValidateEmployeeMinusRulesAsync(showMessage: true))
         {
             return;
         }
@@ -375,6 +387,11 @@ public partial class RaportUserControl : UserControl
             hoursBox.TextChanged += ValidateTotalHours;
         }
 
+        foreach (var minusBox in minusTextBoxes)
+        {
+            minusBox.TextChanged += ValidateMinusInputAsync;
+        }
+
         buttonСalculate.Click += OnCalculateClick;
         buttonSend.Click += OnSendClick;
     }
@@ -402,6 +419,11 @@ public partial class RaportUserControl : UserControl
         foreach (var hoursBox in hoursTextBoxes)
         {
             hoursBox.TextChanged -= ValidateTotalHours;
+        }
+
+        foreach (var minusBox in minusTextBoxes)
+        {
+            minusBox.TextChanged -= ValidateMinusInputAsync;
         }
     }
 
@@ -503,6 +525,62 @@ public partial class RaportUserControl : UserControl
         }
     }
 
+    private async void ValidateMinusInputAsync(object? sender, EventArgs e)
+    {
+        if (isValidatingMinus || isNormalizingInput || sender is not MaterialTextBox minusBox)
+        {
+            return;
+        }
+
+        var index = minusTextBoxes.IndexOf(minusBox);
+        if (index < 0 || employeeService == null)
+        {
+            return;
+        }
+
+        if (comboBoxes[index].SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
+        {
+            return;
+        }
+
+        if (!int.TryParse(minusBox.Text, out var minus) || minus <= 0)
+        {
+            return;
+        }
+
+        var salaryCheck = await GetCurrentSalaryAsync(employee.Id);
+        if (!salaryCheck.Success || salaryCheck.CurrentSalary >= 0)
+        {
+            return;
+        }
+
+        var hours = int.TryParse(hoursTextBoxes[index].Text, out var parsedHours) ? parsedHours : 0;
+        var maxMinus = hours * employee.HourlyRate;
+        if (minus <= maxMinus)
+        {
+            return;
+        }
+
+        isValidatingMinus = true;
+        try
+        {
+            minusBox.Text = maxMinus.ToString();
+            minusBox.SelectionStart = minusBox.TextLength;
+
+            MessageBox.Show(
+                $"Для сотрудника {employee.Name} текущая ЗП отрицательная ({salaryCheck.CurrentSalary} руб.).\n" +
+                $"Минус ограничен {maxMinus} руб. (часы {hours} * ставка {employee.HourlyRate}).",
+                "Ограничение минуса",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
+        }
+        finally
+        {
+            isValidatingMinus = false;
+        }
+    }
+
     private void Event_ListEmployeeChange(object? sender, ListChangedEventArgs e)
     {
         if (InvokeRequired)
@@ -510,6 +588,8 @@ public partial class RaportUserControl : UserControl
             Invoke(() => Event_ListEmployeeChange(sender, e));
             return;
         }
+
+        employeeSalaryCache.Clear();
 
         var employees = employeeService?.Employees.ToList() ?? [];
 
@@ -661,6 +741,85 @@ public partial class RaportUserControl : UserControl
         return false;
     }
 
+    private async Task<bool> ValidateEmployeeMinusRulesAsync(bool showMessage)
+    {
+        if (employeeService == null)
+        {
+            return false;
+        }
+
+        foreach (var emp in employeesData)
+        {
+            if (emp.Employee == null || string.IsNullOrWhiteSpace(emp.Employee.Id))
+            {
+                continue;
+            }
+
+            var salaryCheck = await GetCurrentSalaryAsync(emp.Employee.Id);
+            if (!salaryCheck.Success)
+            {
+                if (showMessage)
+                {
+                    MessageBox.Show(
+                        salaryCheck.Message,
+                        "Ошибка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                }
+
+                return false;
+            }
+
+            if (salaryCheck.CurrentSalary >= 0)
+            {
+                continue;
+            }
+
+            var maxMinus = emp.Hours * emp.HourlyRate;
+            if (emp.Minus <= maxMinus)
+            {
+                continue;
+            }
+
+            if (showMessage)
+            {
+                MessageBox.Show(
+                    $"Для сотрудника {emp.Employee.Name} при отрицательной ЗП ({salaryCheck.CurrentSalary} руб.) " +
+                    $"минус не может превышать {maxMinus} руб.",
+                    "Ошибка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<(bool Success, int CurrentSalary, string Message)> GetCurrentSalaryAsync(string employeeId)
+    {
+        if (employeeSalaryCache.TryGetValue(employeeId, out var cachedSalary))
+        {
+            return (true, cachedSalary, string.Empty);
+        }
+
+        if (employeeService == null)
+        {
+            return (false, 0, "Сервис сотрудников недоступен.");
+        }
+
+        var salaryCheck = await employeeService.GetCurrentSalaryAsync(employeeId);
+        if (salaryCheck.Success)
+        {
+            employeeSalaryCache[employeeId] = salaryCheck.CurrentSalary;
+        }
+
+        return salaryCheck;
+    }
+
     private int GetEmployeeIndex(Control? control)
     {
         if (control == null) return -1;
@@ -766,6 +925,7 @@ public partial class RaportUserControl : UserControl
         ClearAllTextBoxes();
 
         employeesData.Clear();
+        employeeSalaryCache.Clear();
         listBoxRaport.Items.Clear();
         listBoxSendInformation.Items.Clear();
     }

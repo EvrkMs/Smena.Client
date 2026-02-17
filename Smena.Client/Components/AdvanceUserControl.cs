@@ -159,6 +159,40 @@ public partial class AdvanceUserControl : UserControl
             return;
         }
 
+        var salaryCheck = await employeeService!.GetCurrentSalaryAsync(employee.Id);
+        if (!salaryCheck.Success)
+        {
+            MessageBox.Show(
+                salaryCheck.Message,
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
+
+        if (salaryCheck.CurrentSalary <= 0)
+        {
+            MessageBox.Show(
+                "У сотрудника нет доступной ЗП для выплаты.",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
+
+        if (amount > salaryCheck.CurrentSalary)
+        {
+            MessageBox.Show(
+                $"Нельзя выдать больше текущей ЗП ({salaryCheck.CurrentSalary} руб.).",
+                "Ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+            return;
+        }
+
         var isNonCash = checkBoxExtractSalaryFromSafe.Checked;
         var request = new GrpcAdvanceRequest
         {

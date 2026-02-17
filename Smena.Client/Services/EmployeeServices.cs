@@ -57,4 +57,31 @@ public class EmployeeService
             return false;
         }
     }
+
+    public async Task<(bool Success, int CurrentSalary, string Message)> GetCurrentSalaryAsync(
+        string employeeId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _client.EmployeeCurrentSalaryAsync(
+                new GrpcEmployeeSalaryRequest { EmployeeId = employeeId },
+                cancellationToken: ct);
+
+            if (response == null)
+            {
+                return (false, 0, "Server returned empty response.");
+            }
+
+            return (true, (int)response.CurrentSalary, string.Empty);
+        }
+        catch (RpcException ex)
+        {
+            return (false, 0, $"gRPC: {ex.StatusCode} - {ex.Status.Detail}");
+        }
+        catch (Exception ex)
+        {
+            return (false, 0, ex.Message);
+        }
+    }
 }
