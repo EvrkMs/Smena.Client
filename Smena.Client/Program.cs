@@ -15,7 +15,11 @@ internal static class Program
 			.AddEnvironmentVariables()
 			.Build();
 
-		var address = config["Grpc:Address"] ?? "http://localhost:5001";
+		var address =
+			Environment.GetEnvironmentVariable("AVA_SMENA_GRPC_ADDRESS") ??
+			Environment.GetEnvironmentVariable("Grpc__Address") ??
+			config["Grpc:Address"] ??
+			"http://localhost:5001";
 		var apiKey =
 			Environment.GetEnvironmentVariable("AVA_SMENA_API_KEY") ??
 			Environment.GetEnvironmentVariable("Grpc__ApiKey") ??
