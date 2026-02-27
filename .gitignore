@@ -214,6 +214,9 @@ csx/
 ecf/
 rcf/
 
+# Local client settings (secrets/endpoints)
+Smena.Client/appsettings.json
+
 # Windows Store app package directories and files
 AppPackages/
 BundleArtifacts/
