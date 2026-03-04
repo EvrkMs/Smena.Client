@@ -1,6 +1,7 @@
 using Grpc.Core;
 using Grpc.Net.Client;
 using System.Net.Http;
+using System;
 
 namespace Smena.Client;
 
@@ -13,7 +14,11 @@ public class GrpcService : IDisposable, IAsyncDisposable
 
     public GrpcService(string address, string apiKey)
     {
-        _httpClient = new HttpClient();
+        _httpClient = new HttpClient
+        {
+            // Closing shift may include photo and Telegram operations that exceed the default 100s timeout.
+            Timeout = TimeSpan.FromMinutes(6)
+        };
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
             _httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);

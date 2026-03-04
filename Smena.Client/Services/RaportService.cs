@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
 using Host.Grpc.Services.Raport;
+using System;
 
 namespace Smena.Client.Services;
 
@@ -11,7 +12,9 @@ public class RaportService(GrpcService grpcService)
     {
         try
         {
-            var response = await _client.SendRaportAsync(request);
+            var response = await _client.SendRaportAsync(
+                request,
+                deadline: DateTime.UtcNow.AddMinutes(5));
             return (response.Success, response.Message);
         }
         catch (RpcException ex)
