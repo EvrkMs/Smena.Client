@@ -107,6 +107,9 @@ public partial class RaportUserControl : UserControl
 
     public ReportData GenerateReport()
     {
+        // Keep report math deterministic: always read the latest values from UI inputs.
+        RebuildEmployeesList();
+
         var report = new ReportData
         {
             Date = DateTime.Now,
@@ -555,7 +558,8 @@ public partial class RaportUserControl : UserControl
         }
 
         var hours = int.TryParse(hoursTextBoxes[index].Text, out var parsedHours) ? parsedHours : 0;
-        var maxMinus = hours * employee.HourlyRate;
+        var effectiveHourlyRate = GetEffectiveHourlyRate(employee);
+        var maxMinus = hours * effectiveHourlyRate;
         if (minus <= maxMinus)
         {
             return;
@@ -569,7 +573,7 @@ public partial class RaportUserControl : UserControl
 
             MessageBox.Show(
                 $"Для сотрудника {employee.Name} текущая ЗП отрицательная ({salaryCheck.CurrentSalary} руб.).\n" +
-                $"Минус ограничен {maxMinus} руб. (часы {hours} * ставка {employee.HourlyRate}).",
+                $"Минус ограничен {maxMinus} руб. (часы {hours} * ставка {effectiveHourlyRate}).",
                 "Ограничение минуса",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning
@@ -660,6 +664,7 @@ public partial class RaportUserControl : UserControl
     {
         if (isUpdating) return;
 
+        RebuildEmployeesList();
         var report = GenerateReport();
         var preview = FormatReportPreview(report);
 
@@ -748,6 +753,8 @@ public partial class RaportUserControl : UserControl
             return false;
         }
 
+        employeeSalaryCache.Clear();
+
         foreach (var emp in employeesData)
         {
             if (emp.Employee == null || string.IsNullOrWhiteSpace(emp.Employee.Id))
@@ -776,7 +783,8 @@ public partial class RaportUserControl : UserControl
                 continue;
             }
 
-            var maxMinus = emp.Hours * emp.HourlyRate;
+            var effectiveHourlyRate = GetEffectiveHourlyRate(emp.Employee);
+            var maxMinus = emp.Hours * effectiveHourlyRate;
             if (emp.Minus <= maxMinus)
             {
                 continue;
@@ -786,7 +794,7 @@ public partial class RaportUserControl : UserControl
             {
                 MessageBox.Show(
                     $"Для сотрудника {emp.Employee.Name} при отрицательной ЗП ({salaryCheck.CurrentSalary} руб.) " +
-                    $"минус не может превышать {maxMinus} руб.",
+                    $"минус не может превышать {maxMinus} руб. (часы {emp.Hours} * ставка {effectiveHourlyRate}).",
                     "Ошибка",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
@@ -818,6 +826,25 @@ public partial class RaportUserControl : UserControl
         }
 
         return salaryCheck;
+    }
+
+    private int GetEffectiveHourlyRate(GrpcEmployee? employee)
+    {
+        if (employee == null)
+        {
+            return 0;
+        }
+
+        if (employeeService != null)
+        {
+            var latest = employeeService.Employees.FirstOrDefault(e => e.Id == employee.Id);
+            if (latest != null)
+            {
+                return latest.HourlyRate;
+            }
+        }
+
+        return employee.HourlyRate;
     }
 
     private int GetEmployeeIndex(Control? control)
@@ -1022,5 +1049,3 @@ public partial class RaportUserControl : UserControl
 
     #endregion
 }
-
-
