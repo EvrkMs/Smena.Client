@@ -123,9 +123,7 @@ public partial class RaportUserControl : UserControl
             FactSafe = int.TryParse(textBoxSafe.Text, out var fs) ? fs : 0
         };
         report.NewSafe = report.FactSafe + (report.FactCash - ReportData.InitialCash);
-
-        int safeDiscrepancy = report.FactSafe - (int)report.ProgramSafe;
-        report.SafeDiscrepancy = safeDiscrepancy > 0 ? 0 : safeDiscrepancy;
+        report.SafeDiscrepancy = report.FactSafe - (int)report.ProgramSafe;
 
         report.Revenue = (report.FactCash - ReportData.InitialCash) + report.FactNonCash;
         report.TotalSalary = employeesData.Sum(e => e.Salary);
@@ -145,6 +143,8 @@ public partial class RaportUserControl : UserControl
 
     private async void OnCalculateClick(object? sender, EventArgs e)
     {
+        await RefreshSafeFromServerAsync();
+
         if (employeesData.Count == 0)
         {
             MessageBox.Show(
@@ -157,6 +157,11 @@ public partial class RaportUserControl : UserControl
         }
 
         var report = GenerateReport();
+        if (!ConfirmSafeDiscrepancy(report, isSendAction: false))
+        {
+            return;
+        }
+
         if (!ValidateMinusTotals(report, showMessage: true))
         {
             return;
@@ -179,6 +184,8 @@ public partial class RaportUserControl : UserControl
 
     private async void OnSendClick(object? sender, EventArgs e)
     {
+        await RefreshSafeFromServerAsync();
+
         if (employeesData.Count == 0)
         {
             MessageBox.Show(
@@ -191,6 +198,10 @@ public partial class RaportUserControl : UserControl
         }
 
         var report = GenerateReport();
+        if (!ConfirmSafeDiscrepancy(report, isSendAction: true))
+        {
+            return;
+        }
 
         // Показываем подтверждение с итоговыми данными
         var totalMinusCash = Math.Abs(report.CashDiscrepancy);
@@ -369,6 +380,7 @@ public partial class RaportUserControl : UserControl
     {
         employeeService?.Employees.ListChanged += Event_ListEmployeeChange;
         safeService?.SafeChanged += Event_SafeChanged;
+        textBoxSafe.TextChanged += OnFactSafeChanged;
 
         foreach (var comboBox in comboBoxes)
         {
@@ -411,6 +423,8 @@ public partial class RaportUserControl : UserControl
 
     private void UnsubscribeNumericTextBoxes()
     {
+        textBoxSafe.TextChanged -= OnFactSafeChanged;
+
         foreach (var textBox in numericTextBoxes)
         {
             textBox.KeyPress -= FilterNumericInput;
@@ -488,9 +502,14 @@ public partial class RaportUserControl : UserControl
         const int MaxTotalHours = 12;
 
         int totalHours = 0;
-        foreach (var hoursBox in hoursTextBoxes)
+        for (int i = 0; i < hoursTextBoxes.Count; i++)
         {
-            if (int.TryParse(hoursBox.Text, out var hours))
+            if (!IsRowActive(i))
+            {
+                continue;
+            }
+
+            if (int.TryParse(hoursTextBoxes[i].Text, out var hours))
             {
                 totalHours += hours;
             }
@@ -541,7 +560,9 @@ public partial class RaportUserControl : UserControl
             return;
         }
 
-        if (comboBoxes[index].SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
+        if (!IsRowActive(index) ||
+            comboBoxes[index].SelectedItem is not GrpcEmployee employee ||
+            employee == nullComboBox)
         {
             return;
         }
@@ -635,6 +656,11 @@ public partial class RaportUserControl : UserControl
         UpdateReportPreview(sender, EventArgs.Empty);
     }
 
+    private async void OnFactSafeChanged(object? sender, EventArgs e)
+    {
+        await RefreshSafeFromServerAsync();
+    }
+
     private void DataSalaryRaport(object? sender, EventArgs e)
     {
         if (isUpdating) return;
@@ -689,6 +715,24 @@ public partial class RaportUserControl : UserControl
 
         listBoxSendInformation.Items.Add(message);
     }
+
+    private async Task RefreshSafeFromServerAsync()
+    {
+        if (safeService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await safeService.RefreshCurrentSafeAsync();
+        }
+        catch
+        {
+            // keep the last known safe value if refresh fails
+        }
+    }
+
     private string FormatReportPreview(ReportData report)
     {
         var sb = new System.Text.StringBuilder();
@@ -701,7 +745,7 @@ public partial class RaportUserControl : UserControl
         sb.AppendLine($"Итог: {report.Total}");
         sb.AppendLine();
         sb.AppendLine($"Минус по кассе: {report.CashDiscrepancy}");
-        sb.AppendLine($"Минус по сейфу: {report.SafeDiscrepancy}");
+        sb.AppendLine($"{GetSafeDiscrepancyCaption(report.SafeDiscrepancy)}: {Math.Abs(report.SafeDiscrepancy)}");
         sb.AppendLine();
         sb.AppendLine($"Факт сейфа: {report.FactSafe}");
         sb.AppendLine($"Теперь сейфа: {report.NewSafe}");
@@ -719,6 +763,50 @@ public partial class RaportUserControl : UserControl
 
         return sb.ToString();
     }
+
+    private bool ConfirmSafeDiscrepancy(ReportData report, bool isSendAction)
+    {
+        if (report.SafeDiscrepancy == 0)
+        {
+            return true;
+        }
+
+        var discrepancyTitle = GetSafeDiscrepancyCaption(report.SafeDiscrepancy);
+        var discrepancyAmount = Math.Abs(report.SafeDiscrepancy);
+        var message =
+            $"Актуальное значение сейфа обновлено: {report.ProgramSafe} руб.\n" +
+            $"Указано по факту: {report.FactSafe} руб.\n" +
+            $"{discrepancyTitle}: {discrepancyAmount} руб.";
+
+        if (!isSendAction)
+        {
+            MessageBox.Show(
+                message,
+                "Расхождение по сейфу",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
+
+            return true;
+        }
+
+        var result = MessageBox.Show(
+            $"{message}\n\nПродолжить отправку отчёта?",
+            "Расхождение по сейфу",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning
+        );
+
+        return result == DialogResult.Yes;
+    }
+
+    private static string GetSafeDiscrepancyCaption(int safeDiscrepancy) =>
+        safeDiscrepancy switch
+        {
+            > 0 => "Плюс по сейфу",
+            < 0 => "Минус по сейфу",
+            _ => "Расхождение по сейфу"
+        };
 
     private bool ValidateMinusTotals(ReportData report, bool showMessage)
     {
@@ -870,7 +958,9 @@ public partial class RaportUserControl : UserControl
         var hoursBox = hoursTextBoxes[index];
         var minusBox = minusTextBoxes[index];
 
-        if (comboBox.SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
+        if (!IsRowActive(index) ||
+            comboBox.SelectedItem is not GrpcEmployee employee ||
+            employee == nullComboBox)
         {
             RebuildEmployeesList();
             return;
@@ -893,16 +983,18 @@ public partial class RaportUserControl : UserControl
     {
         employeesData.Clear();
 
-        AddEmployeeIfValid(comboBoxFirstNameRaport, textBoxHoursFirstNameRaport, textBoxMinusFirstNameRaport);
-        AddEmployeeIfValid(comboBoxSecondNameRaport, textBoxHoursSecondNameRaport, textBoxMinusSecondNameRaport);
-        AddEmployeeIfValid(comboBoxThirdNameRaport, textBoxHoursThirdNameRaport, textBoxMinusThirdNameRaport);
+        AddEmployeeIfValid(0, comboBoxFirstNameRaport, textBoxHoursFirstNameRaport, textBoxMinusFirstNameRaport);
+        AddEmployeeIfValid(1, comboBoxSecondNameRaport, textBoxHoursSecondNameRaport, textBoxMinusSecondNameRaport);
+        AddEmployeeIfValid(2, comboBoxThirdNameRaport, textBoxHoursThirdNameRaport, textBoxMinusThirdNameRaport);
 
         UpdateListboxSalaryRaport();
     }
 
-    private void AddEmployeeIfValid(ComboBox comboBox, MaterialTextBox hoursBox, MaterialTextBox minusBox)
+    private void AddEmployeeIfValid(int index, ComboBox comboBox, MaterialTextBox hoursBox, MaterialTextBox minusBox)
     {
-        if (comboBox.SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
+        if (!IsRowActive(index) ||
+            comboBox.SelectedItem is not GrpcEmployee employee ||
+            employee == nullComboBox)
             return;
 
         employeesData.Add(new EmployeeHoursList
@@ -978,30 +1070,42 @@ public partial class RaportUserControl : UserControl
         var secondValid = comboBoxSecondNameRaport.SelectedItem is GrpcEmployee second && second != nullComboBox;
         var thirdValid = comboBoxThirdNameRaport.SelectedItem is GrpcEmployee third && third != nullComboBox;
 
+        textBoxHoursFirstNameRaport.Visible = firstValid;
+        textBoxMinusFirstNameRaport.Visible = firstValid;
         comboBoxSecondNameRaport.Visible = firstValid;
 
-        textBoxMinusFirstNameRaport.Visible =
-        textBoxHoursSecondNameRaport.Visible =
+        textBoxHoursSecondNameRaport.Visible = firstValid && secondValid;
         textBoxMinusSecondNameRaport.Visible = firstValid && secondValid;
 
         comboBoxThirdNameRaport.Visible = firstValid && secondValid;
 
-        textBoxHoursThirdNameRaport.Visible =
+        textBoxHoursThirdNameRaport.Visible = firstValid && secondValid && thirdValid;
         textBoxMinusThirdNameRaport.Visible = firstValid && secondValid && thirdValid;
 
         if (!firstValid)
         {
-            ClearAllTextBoxes();
+            return;
         }
-        else if (!secondValid)
+
+        if (!secondValid)
         {
             comboBoxThirdNameRaport.SelectedIndex = 0;
-            ClearSecondAndThirdTextBoxes();
         }
-        else if (!thirdValid)
+    }
+
+    private bool IsRowActive(int index)
+    {
+        if (index < 0 || index >= comboBoxes.Count)
         {
-            ClearThirdTextBoxes();
+            return false;
         }
+
+        if (comboBoxes[index].SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
+        {
+            return false;
+        }
+
+        return hoursTextBoxes[index].Visible && minusTextBoxes[index].Visible;
     }
 
     private void ClearAllTextBoxes()
