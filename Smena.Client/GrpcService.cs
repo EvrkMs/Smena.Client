@@ -39,9 +39,12 @@ public class GrpcService : IDisposable, IAsyncDisposable
         _httpClient.Dispose();
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        Dispose();
-        return ValueTask.CompletedTask;
+        if (_disposed) return;
+        _disposed = true;
+        await Channel.ShutdownAsync();
+        Channel.Dispose();
+        _httpClient.Dispose();
     }
 }

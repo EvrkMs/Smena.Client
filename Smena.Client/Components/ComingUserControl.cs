@@ -1,5 +1,6 @@
 ﻿using Host.Grpc.Services.Safe;
 using MaterialSkin.Controls;
+using Smena.Client.Helpers;
 using Smena.Client.Services;
 
 namespace Smena.Client.Components;
@@ -30,39 +31,16 @@ public partial class ComingUserControl : UserControl
     public void UnsubscribeFromEvents()
     {
         buttonSendPlusSafe.Click -= OnSendClick;
-        textBoxAmountPlusSafe.KeyPress -= FilterNumericInput;
+        textBoxAmountPlusSafe.KeyPress -= InputHelper.FilterAmountInput;
     }
 
     private void SubscribeToEvents()
     {
         buttonSendPlusSafe.Click += OnSendClick;
-        textBoxAmountPlusSafe.KeyPress += FilterNumericInput;
+        textBoxAmountPlusSafe.KeyPress += InputHelper.FilterAmountInput;
 
         textBoxAmountPlusSafe.TextChanged += (_, _) => SaveFieldToCache();
         textBoxCommentPlusAmount.TextChanged += (_, _) => SaveFieldToCache();
-    }
-
-    private void FilterNumericInput(object? sender, KeyPressEventArgs e)
-    {
-        if (sender is not MaterialTextBox textBox) return;
-
-        if (textBox == textBoxCommentPlusAmount)
-            return;
-
-        if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (!char.IsControl(e.KeyChar))
-        {
-            int newLength = textBox.TextLength - textBox.SelectionLength + 1;
-            if (newLength > 6)
-            {
-                e.Handled = true;
-            }
-        }
     }
 
     private async void OnSendClick(object? sender, EventArgs e)

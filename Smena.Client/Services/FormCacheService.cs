@@ -22,7 +22,7 @@ public sealed class FormCacheService : IDisposable
 
     private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _writeLock = new();
-    private bool _dirty;
+    private volatile bool _dirty;
     private bool _disposed;
     private readonly System.Windows.Forms.Timer _flushTimer;
 

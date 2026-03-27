@@ -1,6 +1,7 @@
 ﻿using Host.Grpc.Services.Employee;
 using Host.Grpc.Services.Inventory;
 using MaterialSkin.Controls;
+using Smena.Client.Helpers;
 using Smena.Client.Services;
 using System.ComponentModel;
 
@@ -35,7 +36,7 @@ public partial class InventoryUserControl : UserControl
         }
 
         buttonSendInventory.Click -= OnSendClick;
-        textBoxAmountInventory.KeyPress -= FilterNumericInput;
+        textBoxAmountInventory.KeyPress -= InputHelper.FilterAmountInput;
         textBoxAmountInventory.TextChanged -= OnAmountChanged;
     }
 
@@ -48,7 +49,7 @@ public partial class InventoryUserControl : UserControl
         }
 
         buttonSendInventory.Click += OnSendClick;
-        textBoxAmountInventory.KeyPress += FilterNumericInput;
+        textBoxAmountInventory.KeyPress += InputHelper.FilterAmountInput;
         textBoxAmountInventory.TextChanged += OnAmountChanged;
         listBoxNameInventory.SelectedIndexChanged += OnAmountChanged;
     }
@@ -99,26 +100,6 @@ public partial class InventoryUserControl : UserControl
             if (index < listBoxNameInventory.Items.Count)
             {
                 listBoxNameInventory.SetSelected(index, true);
-            }
-        }
-    }
-
-    private void FilterNumericInput(object? sender, KeyPressEventArgs e)
-    {
-        if (sender is not MaterialTextBox textBox) return;
-
-        if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (!char.IsControl(e.KeyChar))
-        {
-            int newLength = textBox.TextLength - textBox.SelectionLength + 1;
-            if (newLength > 6)
-            {
-                e.Handled = true;
             }
         }
     }
@@ -231,5 +212,15 @@ public partial class InventoryUserControl : UserControl
         textBoxAmountInventory.Clear();
         listBoxNameInventory.ClearSelected();
         buttonSendInventory.Text = "Отправить инвент";
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            UnsubscribeFromEvents();
+            components?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }

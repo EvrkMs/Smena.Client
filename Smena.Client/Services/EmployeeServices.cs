@@ -14,9 +14,11 @@ public class EmployeeService
     public EmployeeService(GrpcService grpcService)
     {
         _client = new(grpcService.CallInvoker);
-        _ = LoadOrReloadListAsync();
     }
 
+    /// <summary>
+    /// Must be called from the UI thread (or via Invoke) to safely update Employees.
+    /// </summary>
     public async Task LoadOrReloadListAsync()
     {
         try
@@ -24,37 +26,46 @@ public class EmployeeService
             var response = await _client.EmployeesListAsync(new Empty());
             if (response?.Employees == null) return;
 
-            Employees.Clear();
-            foreach (var employee in response.Employees)
+            // Build the list off-thread, then swap on the current (UI) context.
+            var items = response.Employees.ToList();
+
+            Employees.RaiseListChangedEvents = false;
+            try
             {
-                Employees.Add(employee);
+                Employees.Clear();
+                foreach (var employee in items)
+                {
+                    Employees.Add(employee);
+                }
             }
-            Employees.ResetBindings();
+            finally
+            {
+                Employees.RaiseListChangedEvents = true;
+                Employees.ResetBindings();
+            }
         }
-        catch (RpcException ex)
+        catch (RpcException)
         {
-            MessageBox.Show($"gRPC: {ex.StatusCode} - {ex.Message}");
+            // Silently ignore on load — the list stays empty.
         }
     }
 
-    public async Task<bool> AddEmployeeAsync(GrpcEmployee employee)
+    public async Task<(bool Success, string Message)> AddEmployeeAsync(GrpcEmployee employee)
     {
         try
         {
             var res = await _client.EmployeeAddAsync(employee);
             if (res == null || !res.Success)
             {
-                MessageBox.Show(res?.Message ?? "Server returned empty response");
-                return false;
+                return (false, res?.Message ?? "Server returned empty response");
             }
 
             await LoadOrReloadListAsync();
-            return true;
+            return (true, res.Message ?? string.Empty);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message);
-            return false;
+            return (false, ex.Message);
         }
     }
 

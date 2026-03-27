@@ -48,6 +48,24 @@ internal partial class MainForm : MaterialForm
             Accent.Lime700,
             TextShade.WHITE
         );
+
+        Shown += OnShownAsync;
+    }
+
+    private async void OnShownAsync(object? sender, EventArgs e)
+    {
+        // Load data asynchronously after the form is shown to avoid blocking the UI thread.
+        try
+        {
+            await employeeService.LoadOrReloadListAsync();
+        }
+        catch { /* list stays empty; user can retry */ }
+
+        try
+        {
+            await safeService.RefreshCurrentSafeAsync();
+        }
+        catch { /* safe stays 0; explicit refresh will update later */ }
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -177,13 +195,17 @@ internal partial class MainForm : MaterialForm
             addButton.Enabled = false;
             try
             {
-                var ok = await employeeService.AddEmployeeAsync(employee);
-                if (ok)
+                var (success, message) = await employeeService.AddEmployeeAsync(employee);
+                if (success)
                 {
                     nameBox.Clear();
                     hourlyRateBox.Clear();
                     telegramIdBox.Clear();
                     salaryThreadBox.Clear();
+                }
+                else
+                {
+                    MessageBox.Show(message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             finally

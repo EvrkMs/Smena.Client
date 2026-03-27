@@ -1,6 +1,7 @@
 ﻿using Host.Grpc.Services.Employee;
 using Host.Grpc.Services.Expense;
 using MaterialSkin.Controls;
+using Smena.Client.Helpers;
 using Smena.Client.Services;
 using System.ComponentModel;
 
@@ -46,7 +47,7 @@ public partial class ExpenseUserControl : UserControl
         }
 
         buttonSendExpenses.Click -= OnSendClick;
-        textBoxAmountExpenses.KeyPress -= FilterNumericInput;
+        textBoxAmountExpenses.KeyPress -= InputHelper.FilterAmountInput;
         checkBoxPhotoSendExpenses.CheckedChanged -= OnPhotoCheckChanged;
     }
 
@@ -66,8 +67,7 @@ public partial class ExpenseUserControl : UserControl
         }
 
         buttonSendExpenses.Click += OnSendClick;
-        textBoxAmountExpenses.KeyPress += FilterNumericInput;
-        textBoxCommentExpenses.KeyPress += FilterNumericInput;
+        textBoxAmountExpenses.KeyPress += InputHelper.FilterAmountInput;
         checkBoxPhotoSendExpenses.CheckedChanged += OnPhotoCheckChanged;
 
         textBoxAmountExpenses.TextChanged += (_, _) => SaveFieldToCache();
@@ -104,29 +104,6 @@ public partial class ExpenseUserControl : UserControl
 
         List<GrpcEmployee> list = [nullComboBox, .. employees];
         comboBoxPhotoSendExpenses.DataSource = list;
-    }
-
-    private void FilterNumericInput(object? sender, KeyPressEventArgs e)
-    {
-        if (sender is not MaterialTextBox textBox) return;
-
-        if (textBox == textBoxCommentExpenses)
-            return;
-
-        if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (!char.IsControl(e.KeyChar))
-        {
-            int newLength = textBox.TextLength - textBox.SelectionLength + 1;
-            if (newLength > 6)
-            {
-                e.Handled = true;
-            }
-        }
     }
 
     private async void OnSendClick(object? sender, EventArgs e)

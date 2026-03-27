@@ -1,6 +1,7 @@
 ﻿using Host.Grpc.Services.Advance;
 using Host.Grpc.Services.Employee;
 using MaterialSkin.Controls;
+using Smena.Client.Helpers;
 using Smena.Client.Services;
 using System.ComponentModel;
 
@@ -44,7 +45,7 @@ public partial class AdvanceUserControl : UserControl
         }
 
         buttonSendExtractSalary.Click -= OnSendClick;
-        textBoxSalaryExtractAmount.KeyPress -= FilterNumericInput;
+        textBoxSalaryExtractAmount.KeyPress -= InputHelper.FilterAmountInput;
         checkBoxExtractSalaryFromSafe.CheckedChanged -= OnBezNalChanged;
     }
 
@@ -64,7 +65,7 @@ public partial class AdvanceUserControl : UserControl
         }
 
         buttonSendExtractSalary.Click += OnSendClick;
-        textBoxSalaryExtractAmount.KeyPress += FilterNumericInput;
+        textBoxSalaryExtractAmount.KeyPress += InputHelper.FilterAmountInput;
         checkBoxExtractSalaryFromSafe.CheckedChanged += OnBezNalChanged;
 
         // Cache hooks
@@ -125,26 +126,6 @@ public partial class AdvanceUserControl : UserControl
             if (employee != null)
             {
                 comboBoxExtractSalaryName.SelectedItem = employee;
-            }
-        }
-    }
-
-    private void FilterNumericInput(object? sender, KeyPressEventArgs e)
-    {
-        if (sender is not MaterialTextBox textBox) return;
-
-        if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (!char.IsControl(e.KeyChar))
-        {
-            int newLength = textBox.TextLength - textBox.SelectionLength + 1;
-            if (newLength > 6)
-            {
-                e.Handled = true;
             }
         }
     }

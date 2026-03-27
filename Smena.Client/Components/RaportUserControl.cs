@@ -1,6 +1,7 @@
 ﻿using Host.Grpc.Services.Employee;
 using Host.Grpc.Services.Raport;
 using MaterialSkin.Controls;
+using Smena.Client.Helpers;
 using Smena.Client.Services;
 using System.ComponentModel;
 
@@ -399,7 +400,7 @@ public partial class RaportUserControl : UserControl
 
         foreach (var textBox in numericTextBoxes)
         {
-            textBox.KeyPress += FilterNumericInput;
+            textBox.KeyPress += FilterNumericInputRaport;
             textBox.TextChanged += NormalizeNumericInput;
             textBox.TextChanged += DataSalaryRaport;
             textBox.TextChanged += UpdateReportPreview;
@@ -430,19 +431,22 @@ public partial class RaportUserControl : UserControl
             comboBox.SelectedIndexChanged -= OnComboBoxSelectedIndexChanged;
             comboBox.SelectedIndexChanged -= DataSalaryRaport;
             comboBox.SelectedIndexChanged -= ForceComboRedraw;
+            comboBox.SelectedIndexChanged -= SaveFieldToCache;
         }
     }
 
     private void UnsubscribeNumericTextBoxes()
     {
         textBoxSafe.TextChanged -= OnFactSafeChanged;
+        textBoxWhyMinus.TextChanged -= SaveFieldToCache;
 
         foreach (var textBox in numericTextBoxes)
         {
-            textBox.KeyPress -= FilterNumericInput;
+            textBox.KeyPress -= FilterNumericInputRaport;
             textBox.TextChanged -= NormalizeNumericInput;
             textBox.TextChanged -= DataSalaryRaport;
             textBox.TextChanged -= UpdateReportPreview;
+            textBox.TextChanged -= SaveFieldToCache;
         }
 
         foreach (var hoursBox in hoursTextBoxes)
@@ -456,28 +460,11 @@ public partial class RaportUserControl : UserControl
         }
     }
 
-    private void FilterNumericInput(object? sender, KeyPressEventArgs e)
+    private void FilterNumericInputRaport(object? sender, KeyPressEventArgs e)
     {
         if (sender is not MaterialTextBox textBox) return;
-
-        if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (!char.IsControl(e.KeyChar))
-        {
-            bool isHoursField = hoursTextBoxes.Contains(textBox);
-            int maxLength = isHoursField ? 2 : 6;
-
-            int newLength = textBox.TextLength - textBox.SelectionLength + 1;
-
-            if (newLength > maxLength)
-            {
-                e.Handled = true;
-            }
-        }
+        bool isHoursField = hoursTextBoxes.Contains(textBox);
+        InputHelper.FilterNumericInput(sender, e, isHoursField ? 2 : 6);
     }
 
     private void NormalizeNumericInput(object? sender, EventArgs e)

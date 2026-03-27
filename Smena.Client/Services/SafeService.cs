@@ -15,8 +15,7 @@ public sealed class SafeService : IDisposable
     public SafeService(GrpcService grpcService)
     {
         _client = new GrpcSafeService.GrpcSafeServiceClient(grpcService.CallInvoker);
-
-        TryInitCurrentSafe();
+        // NOTE: init is now async — call RefreshCurrentSafeAsync() from OnShown.
     }
 
     public long CurrentSafe => Interlocked.Read(ref _currentSafe);
@@ -63,17 +62,5 @@ public sealed class SafeService : IDisposable
         }
 
         SafeChanged?.Invoke(this, value);
-    }
-
-    private void TryInitCurrentSafe()
-    {
-        try
-        {
-            LoadOrReloadCurrentSafe();
-        }
-        catch
-        {
-            // ignore init failure; explicit refresh will update later
-        }
     }
 }
