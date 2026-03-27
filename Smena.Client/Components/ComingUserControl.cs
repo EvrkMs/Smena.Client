@@ -7,18 +7,24 @@ namespace Smena.Client.Components;
 public partial class ComingUserControl : UserControl
 {
     private SafeService? _safeService;
+    private FormCacheService? formCache;
+    private bool isRestoringCache;
+
+    private const string CachePrefix = "Coming.";
 
     public ComingUserControl()
     {
         InitializeComponent();
     }
 
-    public void Initialize(SafeService safeService)
+    public void Initialize(SafeService safeService, FormCacheService? formCache = null)
     {
         ArgumentNullException.ThrowIfNull(safeService);
 
         _safeService = safeService;
+        this.formCache = formCache;
         SubscribeToEvents();
+        RestoreCachedValues();
     }
 
     public void UnsubscribeFromEvents()
@@ -31,6 +37,9 @@ public partial class ComingUserControl : UserControl
     {
         buttonSendPlusSafe.Click += OnSendClick;
         textBoxAmountPlusSafe.KeyPress += FilterNumericInput;
+
+        textBoxAmountPlusSafe.TextChanged += (_, _) => SaveFieldToCache();
+        textBoxCommentPlusAmount.TextChanged += (_, _) => SaveFieldToCache();
     }
 
     private void FilterNumericInput(object? sender, KeyPressEventArgs e)
@@ -130,6 +139,34 @@ public partial class ComingUserControl : UserControl
     {
         textBoxAmountPlusSafe.Clear();
         textBoxCommentPlusAmount.Clear();
+        formCache?.ClearPrefix(CachePrefix);
+    }
+
+    private void SaveFieldToCache()
+    {
+        if (isRestoringCache || formCache == null) return;
+
+        formCache.Set($"{CachePrefix}Amount", textBoxAmountPlusSafe.Text);
+        formCache.Set($"{CachePrefix}Comment", textBoxCommentPlusAmount.Text);
+    }
+
+    private void RestoreCachedValues()
+    {
+        if (formCache == null) return;
+
+        isRestoringCache = true;
+        try
+        {
+            var amount = formCache.Get($"{CachePrefix}Amount");
+            if (!string.IsNullOrEmpty(amount)) textBoxAmountPlusSafe.Text = amount;
+
+            var comment = formCache.Get($"{CachePrefix}Comment");
+            if (!string.IsNullOrEmpty(comment)) textBoxCommentPlusAmount.Text = comment;
+        }
+        finally
+        {
+            isRestoringCache = false;
+        }
     }
 
     protected override void Dispose(bool disposing)

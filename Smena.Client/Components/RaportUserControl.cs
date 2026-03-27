@@ -50,6 +50,7 @@ public partial class RaportUserControl : UserControl
     private SafeService? safeService;
     private RaportService? raportService;
     private PhotoService? photoService;
+    private FormCacheService? formCache;
     private readonly List<ComboBox> comboBoxes = [];
     private readonly List<MaterialTextBox> hoursTextBoxes = [];
     private readonly List<MaterialTextBox> minusTextBoxes = [];
@@ -62,6 +63,9 @@ public partial class RaportUserControl : UserControl
     private readonly Dictionary<string, int> employeeSalaryCache = new(StringComparer.Ordinal);
     private bool isValidatingHours = false;
     private bool isValidatingMinus = false;
+    private bool isRestoringCache = false;
+
+    private const string CachePrefix = "Raport.";
 
     #endregion
 
@@ -77,19 +81,22 @@ public partial class RaportUserControl : UserControl
 
     #region Public API
 
-    public void Initialize(EmployeeService employeeService, SafeService safeService, RaportService raportService, PhotoService photoService)
+    public void Initialize(EmployeeService employeeService, SafeService safeService, RaportService raportService, PhotoService photoService, FormCacheService formCache)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
         ArgumentNullException.ThrowIfNull(safeService);
         ArgumentNullException.ThrowIfNull(raportService);
         ArgumentNullException.ThrowIfNull(photoService);
+        ArgumentNullException.ThrowIfNull(formCache);
 
         this.employeeService = employeeService;
         this.safeService = safeService;
         this.raportService = raportService;
         this.photoService = photoService;
+        this.formCache = formCache;
 
         SubscribeToEvents();
+        RestoreCachedValues();
     }
 
     public void UnsubscribeFromEvents()
@@ -387,6 +394,7 @@ public partial class RaportUserControl : UserControl
             comboBox.SelectedIndexChanged += OnComboBoxSelectedIndexChanged;
             comboBox.SelectedIndexChanged += DataSalaryRaport;
             comboBox.SelectedIndexChanged += ForceComboRedraw;
+            comboBox.SelectedIndexChanged += SaveFieldToCache;
         }
 
         foreach (var textBox in numericTextBoxes)
@@ -395,7 +403,11 @@ public partial class RaportUserControl : UserControl
             textBox.TextChanged += NormalizeNumericInput;
             textBox.TextChanged += DataSalaryRaport;
             textBox.TextChanged += UpdateReportPreview;
+            textBox.TextChanged += SaveFieldToCache;
         }
+
+        // Also cache the "why minus" free-text field
+        textBoxWhyMinus.TextChanged += SaveFieldToCache;
 
         foreach (var hoursBox in hoursTextBoxes)
         {
@@ -1047,6 +1059,70 @@ public partial class RaportUserControl : UserControl
         employeeSalaryCache.Clear();
         listBoxRaport.Items.Clear();
         listBoxSendInformation.Items.Clear();
+
+        formCache?.ClearPrefix(CachePrefix);
+    }
+
+    private void SaveFieldToCache(object? sender, EventArgs e)
+    {
+        if (isRestoringCache || formCache == null) return;
+
+        // Save text boxes
+        formCache.Set(CachePrefix + "FactCash", textBoxFactCash.Text);
+        formCache.Set(CachePrefix + "FactNonCash", textBoxFactNonCash.Text);
+        formCache.Set(CachePrefix + "ProgramCash", textBoxProgramCash.Text);
+        formCache.Set(CachePrefix + "ProgramNonCash", textBoxProgramNonCash.Text);
+        formCache.Set(CachePrefix + "Safe", textBoxSafe.Text);
+        formCache.Set(CachePrefix + "WhyMinus", textBoxWhyMinus.Text);
+
+        // Save ComboBox selections by employee name (more stable than index)
+        for (var i = 0; i < comboBoxes.Count; i++)
+        {
+            var emp = comboBoxes[i].SelectedItem as GrpcEmployee;
+            formCache.Set(CachePrefix + $"Employee{i}", emp != null && emp != nullComboBox ? emp.Name : null);
+            formCache.Set(CachePrefix + $"Hours{i}", hoursTextBoxes[i].Text);
+            formCache.Set(CachePrefix + $"Minus{i}", minusTextBoxes[i].Text);
+        }
+    }
+
+    private void RestoreCachedValues()
+    {
+        if (formCache == null) return;
+
+        isRestoringCache = true;
+        try
+        {
+            textBoxFactCash.Text = formCache.Get(CachePrefix + "FactCash") ?? string.Empty;
+            textBoxFactNonCash.Text = formCache.Get(CachePrefix + "FactNonCash") ?? string.Empty;
+            textBoxProgramCash.Text = formCache.Get(CachePrefix + "ProgramCash") ?? string.Empty;
+            textBoxProgramNonCash.Text = formCache.Get(CachePrefix + "ProgramNonCash") ?? string.Empty;
+            textBoxSafe.Text = formCache.Get(CachePrefix + "Safe") ?? string.Empty;
+            textBoxWhyMinus.Text = formCache.Get(CachePrefix + "WhyMinus") ?? string.Empty;
+
+            for (var i = 0; i < comboBoxes.Count; i++)
+            {
+                var cachedName = formCache.Get(CachePrefix + $"Employee{i}");
+                if (!string.IsNullOrWhiteSpace(cachedName))
+                {
+                    for (var j = 0; j < comboBoxes[i].Items.Count; j++)
+                    {
+                        if (comboBoxes[i].Items[j] is GrpcEmployee emp &&
+                            string.Equals(emp.Name, cachedName, StringComparison.Ordinal))
+                        {
+                            comboBoxes[i].SelectedIndex = j;
+                            break;
+                        }
+                    }
+                }
+
+                hoursTextBoxes[i].Text = formCache.Get(CachePrefix + $"Hours{i}") ?? string.Empty;
+                minusTextBoxes[i].Text = formCache.Get(CachePrefix + $"Minus{i}") ?? string.Empty;
+            }
+        }
+        finally
+        {
+            isRestoringCache = false;
+        }
     }
 
     #endregion

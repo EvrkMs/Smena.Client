@@ -11,7 +11,11 @@ public partial class ExpenseUserControl : UserControl
     private EmployeeService? employeeService;
     private ExpenseService? expenseService;
     private PhotoService? photoService;
+    private FormCacheService? formCache;
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
+    private bool isRestoringCache;
+
+    private const string CachePrefix = "Expense.";
 
     public ExpenseUserControl()
     {
@@ -19,7 +23,7 @@ public partial class ExpenseUserControl : UserControl
         SetupDefaultStates();
     }
 
-    public void Initialize(EmployeeService employeeService, ExpenseService expenseService, PhotoService photoService)
+    public void Initialize(EmployeeService employeeService, ExpenseService expenseService, PhotoService photoService, FormCacheService? formCache = null)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
         ArgumentNullException.ThrowIfNull(expenseService);
@@ -28,8 +32,10 @@ public partial class ExpenseUserControl : UserControl
         this.employeeService = employeeService;
         this.expenseService = expenseService;
         this.photoService = photoService;
+        this.formCache = formCache;
 
         SubscribeToEvents();
+        RestoreCachedValues();
     }
 
     public void UnsubscribeFromEvents()
@@ -63,6 +69,11 @@ public partial class ExpenseUserControl : UserControl
         textBoxAmountExpenses.KeyPress += FilterNumericInput;
         textBoxCommentExpenses.KeyPress += FilterNumericInput;
         checkBoxPhotoSendExpenses.CheckedChanged += OnPhotoCheckChanged;
+
+        textBoxAmountExpenses.TextChanged += (_, _) => SaveFieldToCache();
+        textBoxCommentExpenses.TextChanged += (_, _) => SaveFieldToCache();
+        checkBoxFromSafeExpenses.CheckedChanged += (_, _) => SaveFieldToCache();
+        checkBoxPhotoSendExpenses.CheckedChanged += (_, _) => SaveFieldToCache();
     }
 
     private void OnPhotoCheckChanged(object? sender, EventArgs e)
@@ -254,6 +265,42 @@ public partial class ExpenseUserControl : UserControl
         checkBoxFromSafeExpenses.Checked = true;
         checkBoxPhotoSendExpenses.Checked = false;
         comboBoxPhotoSendExpenses.SelectedIndex = 0;
+        formCache?.ClearPrefix(CachePrefix);
+    }
+
+    private void SaveFieldToCache()
+    {
+        if (isRestoringCache || formCache == null) return;
+
+        formCache.Set($"{CachePrefix}Amount", textBoxAmountExpenses.Text);
+        formCache.Set($"{CachePrefix}Comment", textBoxCommentExpenses.Text);
+        formCache.Set($"{CachePrefix}FromSafe", checkBoxFromSafeExpenses.Checked ? "1" : "0");
+        formCache.Set($"{CachePrefix}PhotoSend", checkBoxPhotoSendExpenses.Checked ? "1" : "0");
+    }
+
+    private void RestoreCachedValues()
+    {
+        if (formCache == null) return;
+
+        isRestoringCache = true;
+        try
+        {
+            var amount = formCache.Get($"{CachePrefix}Amount");
+            if (!string.IsNullOrEmpty(amount)) textBoxAmountExpenses.Text = amount;
+
+            var comment = formCache.Get($"{CachePrefix}Comment");
+            if (!string.IsNullOrEmpty(comment)) textBoxCommentExpenses.Text = comment;
+
+            var fromSafe = formCache.Get($"{CachePrefix}FromSafe");
+            if (fromSafe != null) checkBoxFromSafeExpenses.Checked = fromSafe == "1";
+
+            var photoSend = formCache.Get($"{CachePrefix}PhotoSend");
+            if (photoSend != null) checkBoxPhotoSendExpenses.Checked = photoSend == "1";
+        }
+        finally
+        {
+            isRestoringCache = false;
+        }
     }
 
     protected override void Dispose(bool disposing)

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Smena.Client.Services;
 using System;
 using System.Windows.Forms;
 
@@ -27,6 +28,7 @@ internal static class Program
 			string.Empty;
 
 		var grpcService = new GrpcService(address, apiKey);
-		Application.Run(new MainForm(grpcService));
+		var formCache = new FormCacheService();
+		Application.Run(new MainForm(grpcService, formCache));
 	}
 }

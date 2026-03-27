@@ -10,7 +10,11 @@ public partial class AdvanceUserControl : UserControl
 {
     private EmployeeService? employeeService;
     private AdvanceService? advanceService;
+    private FormCacheService? formCache;
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
+    private bool isRestoringCache;
+
+    private const string CachePrefix = "Advance.";
 
     public AdvanceUserControl()
     {
@@ -18,15 +22,18 @@ public partial class AdvanceUserControl : UserControl
         SetupDefaultStates();
     }
 
-    public void Initialize(EmployeeService employeeService, AdvanceService advanceService)
+    public void Initialize(EmployeeService employeeService, AdvanceService advanceService, FormCacheService formCache)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
         ArgumentNullException.ThrowIfNull(advanceService);
+        ArgumentNullException.ThrowIfNull(formCache);
 
         this.employeeService = employeeService;
         this.advanceService = advanceService;
+        this.formCache = formCache;
 
         SubscribeToEvents();
+        RestoreCachedValues();
     }
 
     public void UnsubscribeFromEvents()
@@ -59,6 +66,13 @@ public partial class AdvanceUserControl : UserControl
         buttonSendExtractSalary.Click += OnSendClick;
         textBoxSalaryExtractAmount.KeyPress += FilterNumericInput;
         checkBoxExtractSalaryFromSafe.CheckedChanged += OnBezNalChanged;
+
+        // Cache hooks
+        textBoxSalaryExtractAmount.TextChanged += SaveFieldToCache;
+        comboBoxExtractSalaryName.SelectedIndexChanged += SaveFieldToCache;
+        checkBoxExtractSalaryFromSafe.CheckedChanged += SaveFieldToCache;
+        checkBoxAdvanceExtract.CheckedChanged += SaveFieldToCache;
+        checkBoxSalaryAdvance.CheckedChanged += SaveFieldToCache;
 
         checkBoxAdvanceExtract.CheckedChanged += (s, e) =>
         {
@@ -259,6 +273,57 @@ public partial class AdvanceUserControl : UserControl
         checkBoxAdvanceExtract.Checked = true;
         checkBoxSalaryAdvance.Checked = false;
         buttonSendExtractSalary.Text = "Отправить (из сейфа)";
+
+        formCache?.ClearPrefix(CachePrefix);
+    }
+
+    private void SaveFieldToCache(object? sender, EventArgs e)
+    {
+        if (isRestoringCache || formCache == null) return;
+
+        formCache.Set(CachePrefix + "Amount", textBoxSalaryExtractAmount.Text);
+        var emp = comboBoxExtractSalaryName.SelectedItem as GrpcEmployee;
+        formCache.Set(CachePrefix + "Employee", emp != null && emp != nullComboBox ? emp.Name : null);
+        formCache.Set(CachePrefix + "IsNonCash", checkBoxExtractSalaryFromSafe.Checked ? "1" : "0");
+        formCache.Set(CachePrefix + "IsAdvance", checkBoxAdvanceExtract.Checked ? "1" : "0");
+        formCache.Set(CachePrefix + "IsSalary", checkBoxSalaryAdvance.Checked ? "1" : "0");
+    }
+
+    private void RestoreCachedValues()
+    {
+        if (formCache == null) return;
+
+        isRestoringCache = true;
+        try
+        {
+            textBoxSalaryExtractAmount.Text = formCache.Get(CachePrefix + "Amount") ?? string.Empty;
+
+            var cachedName = formCache.Get(CachePrefix + "Employee");
+            if (!string.IsNullOrWhiteSpace(cachedName))
+            {
+                for (var j = 0; j < comboBoxExtractSalaryName.Items.Count; j++)
+                {
+                    if (comboBoxExtractSalaryName.Items[j] is GrpcEmployee emp &&
+                        string.Equals(emp.Name, cachedName, StringComparison.Ordinal))
+                    {
+                        comboBoxExtractSalaryName.SelectedIndex = j;
+                        break;
+                    }
+                }
+            }
+
+            if (formCache.Get(CachePrefix + "IsNonCash") == "1")
+                checkBoxExtractSalaryFromSafe.Checked = true;
+            if (formCache.Get(CachePrefix + "IsSalary") == "1")
+            {
+                checkBoxSalaryAdvance.Checked = true;
+                checkBoxAdvanceExtract.Checked = false;
+            }
+        }
+        finally
+        {
+            isRestoringCache = false;
+        }
     }
 
     protected override void Dispose(bool disposing)
