@@ -30,7 +30,7 @@
             buttonSendExpenses.Depth = 0;
             buttonSendExpenses.HighEmphasis = true;
             buttonSendExpenses.Icon = null;
-            buttonSendExpenses.Location = new Point(17, 498);
+            buttonSendExpenses.Location = new Point(17, 250);
             buttonSendExpenses.Margin = new Padding(4, 6, 4, 6);
             buttonSendExpenses.MouseState = MaterialSkin.MouseState.HOVER;
             buttonSendExpenses.Name = "buttonSendExpenses";
@@ -57,7 +57,7 @@
             comboBoxPhotoSendExpenses.Hint = "Имя";
             comboBoxPhotoSendExpenses.IntegralHeight = false;
             comboBoxPhotoSendExpenses.ItemHeight = 43;
-            comboBoxPhotoSendExpenses.Location = new Point(17, 184);
+            comboBoxPhotoSendExpenses.Location = new Point(17, 132);
             comboBoxPhotoSendExpenses.MaxDropDownItems = 4;
             comboBoxPhotoSendExpenses.MouseState = MaterialSkin.MouseState.OUT;
             comboBoxPhotoSendExpenses.Name = "comboBoxPhotoSendExpenses";
@@ -72,7 +72,7 @@
             checkBoxFromSafeExpenses.Checked = true;
             checkBoxFromSafeExpenses.CheckState = CheckState.Checked;
             checkBoxFromSafeExpenses.Depth = 0;
-            checkBoxFromSafeExpenses.Location = new Point(17, 292);
+            checkBoxFromSafeExpenses.Location = new Point(17, 195);
             checkBoxFromSafeExpenses.Margin = new Padding(0);
             checkBoxFromSafeExpenses.MouseLocation = new Point(-1, -1);
             checkBoxFromSafeExpenses.MouseState = MaterialSkin.MouseState.HOVER;
@@ -88,7 +88,7 @@
             // 
             checkBoxPhotoSendExpenses.AutoSize = true;
             checkBoxPhotoSendExpenses.Depth = 0;
-            checkBoxPhotoSendExpenses.Location = new Point(17, 144);
+            checkBoxPhotoSendExpenses.Location = new Point(17, 90);
             checkBoxPhotoSendExpenses.Margin = new Padding(0);
             checkBoxPhotoSendExpenses.MouseLocation = new Point(-1, -1);
             checkBoxPhotoSendExpenses.MouseState = MaterialSkin.MouseState.HOVER;
@@ -148,7 +148,7 @@
             Controls.Add(textBoxCommentExpenses);
             Controls.Add(textBoxAmountExpenses);
             Name = "ExpenseUserControl";
-            Size = new Size(1147, 629);
+            Size = new Size(1147, 310);
             ResumeLayout(false);
             PerformLayout();
         }

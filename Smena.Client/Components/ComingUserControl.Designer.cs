@@ -27,7 +27,7 @@
             buttonSendPlusSafe.Depth = 0;
             buttonSendPlusSafe.HighEmphasis = true;
             buttonSendPlusSafe.Icon = null;
-            buttonSendPlusSafe.Location = new Point(38, 458);
+            buttonSendPlusSafe.Location = new Point(20, 90);
             buttonSendPlusSafe.Margin = new Padding(4, 6, 4, 6);
             buttonSendPlusSafe.MouseState = MaterialSkin.MouseState.HOVER;
             buttonSendPlusSafe.Name = "buttonSendPlusSafe";
@@ -84,7 +84,7 @@
             Controls.Add(textBoxCommentPlusAmount);
             Controls.Add(textBoxAmountPlusSafe);
             Name = "ComingUserControl";
-            Size = new Size(898, 515);
+            Size = new Size(898, 145);
             ResumeLayout(false);
             PerformLayout();
         }
