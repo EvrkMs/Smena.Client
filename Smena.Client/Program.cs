@@ -34,20 +34,45 @@ internal static class Program
 		var config = new ConfigurationBuilder()
 			.SetBasePath(AppContext.BaseDirectory)
 			.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-			.AddEnvironmentVariables()
 			.Build();
 
-		var address =
-			Environment.GetEnvironmentVariable("AVA_SMENA_GRPC_ADDRESS") ??
-			config["Grpc:Address"] ??
-			"http://localhost:5001";
-		var apiKey =
-			Environment.GetEnvironmentVariable("AVA_SMENA_API_KEY") ??
-			config["Grpc:ApiKey"] ??
-			string.Empty;
+		var address = ResolveGrpcAddress(config);
+		var apiKey = ResolveApiKey(config);
 
 		var grpcService = new GrpcService(address, apiKey);
 		var formCache = new FormCacheService();
 		Application.Run(new MainForm(grpcService, formCache));
+	}
+
+	private static string ResolveGrpcAddress(IConfiguration config)
+	{
+		return
+			config["Grpc:Address"] ??
+			Environment.GetEnvironmentVariable("AVA_SMENA_GRPC_ADDRESS") ??
+			Environment.GetEnvironmentVariable("Grpc__Address") ??
+			BuildGrpcAddressFromEnvironment() ??
+			"http://localhost:5001";
+	}
+
+	private static string ResolveApiKey(IConfiguration config)
+	{
+		return
+			config["Grpc:ApiKey"] ??
+			Environment.GetEnvironmentVariable("API_KEY") ??
+			Environment.GetEnvironmentVariable("AVA_SMENA_API_KEY") ??
+			string.Empty;
+	}
+
+	private static string? BuildGrpcAddressFromEnvironment()
+	{
+		var primaryDomain = Environment.GetEnvironmentVariable("PRIMARY_DOMAIN");
+		var grpcPort = Environment.GetEnvironmentVariable("GRPC_PORT");
+
+		if (string.IsNullOrWhiteSpace(primaryDomain) || string.IsNullOrWhiteSpace(grpcPort))
+		{
+			return null;
+		}
+
+		return $"https://{primaryDomain.Trim()}:{grpcPort.Trim()}";
 	}
 }
