@@ -13,7 +13,7 @@ public partial class AdvanceUserControl : UserControl
     private AdvanceService? advanceService;
     private FormCacheService? formCache;
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
-    private bool isRestoringCache;
+    private bool _cacheEnabled;
 
     private const string CachePrefix = "Advance.";
 
@@ -34,7 +34,12 @@ public partial class AdvanceUserControl : UserControl
         this.formCache = formCache;
 
         SubscribeToEvents();
+    }
+
+    public void EnableCache()
+    {
         RestoreCachedValues();
+        _cacheEnabled = true;
     }
 
     public void UnsubscribeFromEvents()
@@ -109,7 +114,17 @@ public partial class AdvanceUserControl : UserControl
     private void LoadEmployees()
     {
         if (employeeService == null) return;
-        EmployeeComboHelper.Reload(comboBoxExtractSalaryName, employeeService.Employees.ToList(), nullComboBox);
+        var wasEnabled = _cacheEnabled;
+        _cacheEnabled = false;
+        try
+        {
+            EmployeeComboHelper.Reload(comboBoxExtractSalaryName, employeeService.Employees.ToList(), nullComboBox);
+        }
+        finally
+        {
+            _cacheEnabled = wasEnabled;
+        }
+        if (wasEnabled) RestoreCachedEmployee();
     }
 
     private async void OnSendClick(object? sender, EventArgs e)
@@ -242,11 +257,11 @@ public partial class AdvanceUserControl : UserControl
 
     private void SaveFieldToCache(object? sender, EventArgs e)
     {
-        if (isRestoringCache || formCache == null) return;
+        if (!_cacheEnabled || formCache == null) return;
 
         formCache.Set(CachePrefix + "Amount", textBoxSalaryExtractAmount.Text);
         var emp = comboBoxExtractSalaryName.SelectedItem as GrpcEmployee;
-        formCache.Set(CachePrefix + "Employee", emp != null && emp != nullComboBox ? emp.Name : null);
+        formCache.Set(CachePrefix + "Employee", emp != null && emp != nullComboBox ? emp.Id : null);
         formCache.Set(CachePrefix + "IsNonCash", checkBoxExtractSalaryFromSafe.Checked ? "1" : "0");
         formCache.Set(CachePrefix + "IsAdvance", checkBoxAdvanceExtract.Checked ? "1" : "0");
         formCache.Set(CachePrefix + "IsSalary", checkBoxSalaryAdvance.Checked ? "1" : "0");
@@ -256,36 +271,34 @@ public partial class AdvanceUserControl : UserControl
     {
         if (formCache == null) return;
 
-        isRestoringCache = true;
-        try
+        textBoxSalaryExtractAmount.Text = formCache.Get(CachePrefix + "Amount") ?? string.Empty;
+
+        if (formCache.Get(CachePrefix + "IsNonCash") == "1")
+            checkBoxExtractSalaryFromSafe.Checked = true;
+        if (formCache.Get(CachePrefix + "IsSalary") == "1")
         {
-            textBoxSalaryExtractAmount.Text = formCache.Get(CachePrefix + "Amount") ?? string.Empty;
-
-            var cachedName = formCache.Get(CachePrefix + "Employee");
-            if (!string.IsNullOrWhiteSpace(cachedName))
-            {
-                for (var j = 0; j < comboBoxExtractSalaryName.Items.Count; j++)
-                {
-                    if (comboBoxExtractSalaryName.Items[j] is GrpcEmployee emp &&
-                        string.Equals(emp.Name, cachedName, StringComparison.Ordinal))
-                    {
-                        comboBoxExtractSalaryName.SelectedIndex = j;
-                        break;
-                    }
-                }
-            }
-
-            if (formCache.Get(CachePrefix + "IsNonCash") == "1")
-                checkBoxExtractSalaryFromSafe.Checked = true;
-            if (formCache.Get(CachePrefix + "IsSalary") == "1")
-            {
-                checkBoxSalaryAdvance.Checked = true;
-                checkBoxAdvanceExtract.Checked = false;
-            }
+            checkBoxSalaryAdvance.Checked = true;
+            checkBoxAdvanceExtract.Checked = false;
         }
-        finally
+
+        RestoreCachedEmployee();
+    }
+
+    private void RestoreCachedEmployee()
+    {
+        if (formCache == null) return;
+
+        var cachedId = formCache.Get(CachePrefix + "Employee");
+        if (string.IsNullOrWhiteSpace(cachedId)) return;
+
+        for (var j = 0; j < comboBoxExtractSalaryName.Items.Count; j++)
         {
-            isRestoringCache = false;
+            if (comboBoxExtractSalaryName.Items[j] is GrpcEmployee emp &&
+                string.Equals(emp.Id, cachedId, StringComparison.Ordinal))
+            {
+                comboBoxExtractSalaryName.SelectedIndex = j;
+                break;
+            }
         }
     }
 

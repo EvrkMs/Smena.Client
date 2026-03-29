@@ -85,7 +85,7 @@ namespace Smena.Client
             // 
             // tabRaport
             // 
-            tabRaport.BackColor = Color.FromArgb(64, 0, 64);
+            tabRaport.BackColor = Color.FromArgb(30, 18, 80);
             tabRaport.Controls.Add(raportUserControl);
             tabRaport.Font = new Font("Segoe UI", 11F);
             tabRaport.Location = new Point(4, 24);
@@ -105,7 +105,7 @@ namespace Smena.Client
             // 
             // tabAdvance
             // 
-            tabAdvance.BackColor = Color.FromArgb(64, 0, 64);
+            tabAdvance.BackColor = Color.FromArgb(30, 18, 80);
             tabAdvance.Controls.Add(advanceUserControl1);
             tabAdvance.Location = new Point(4, 24);
             tabAdvance.Name = "tabAdvance";
@@ -124,7 +124,7 @@ namespace Smena.Client
             // 
             // tabExpenses
             // 
-            tabExpenses.BackColor = Color.FromArgb(64, 0, 64);
+            tabExpenses.BackColor = Color.FromArgb(30, 18, 80);
             tabExpenses.Controls.Add(expenseUserControl1);
             tabExpenses.ForeColor = SystemColors.ControlText;
             tabExpenses.Location = new Point(4, 24);
@@ -144,7 +144,7 @@ namespace Smena.Client
             // 
             // tabPlusSafe
             // 
-            tabPlusSafe.BackColor = Color.FromArgb(64, 0, 64);
+            tabPlusSafe.BackColor = Color.FromArgb(30, 18, 80);
             tabPlusSafe.Controls.Add(comingUserControl1);
             tabPlusSafe.Location = new Point(4, 24);
             tabPlusSafe.Name = "tabPlusSafe";

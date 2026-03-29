@@ -36,7 +36,7 @@
             buttonSendPlusSafe.TabIndex = 5;
             buttonSendPlusSafe.Text = "Отправить";
             buttonSendPlusSafe.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
-            buttonSendPlusSafe.UseAccentColor = false;
+            buttonSendPlusSafe.UseAccentColor = true;
             buttonSendPlusSafe.UseVisualStyleBackColor = true;
             // 
             // textBoxCommentPlusAmount

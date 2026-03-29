@@ -14,7 +14,7 @@ public partial class ExpenseUserControl : UserControl
     private PhotoService? photoService;
     private FormCacheService? formCache;
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
-    private bool isRestoringCache;
+    private bool _cacheEnabled;
 
     private const string CachePrefix = "Expense.";
 
@@ -36,7 +36,12 @@ public partial class ExpenseUserControl : UserControl
         this.formCache = formCache;
 
         SubscribeToEvents();
+    }
+
+    public void EnableCache()
+    {
         RestoreCachedValues();
+        _cacheEnabled = true;
     }
 
     public void UnsubscribeFromEvents()
@@ -74,6 +79,7 @@ public partial class ExpenseUserControl : UserControl
         textBoxCommentExpenses.TextChanged += (_, _) => SaveFieldToCache();
         checkBoxFromSafeExpenses.CheckedChanged += (_, _) => SaveFieldToCache();
         checkBoxPhotoSendExpenses.CheckedChanged += (_, _) => SaveFieldToCache();
+        comboBoxPhotoSendExpenses.SelectedIndexChanged += (_, _) => SaveFieldToCache();
     }
 
     private void OnPhotoCheckChanged(object? sender, EventArgs e)
@@ -95,7 +101,17 @@ public partial class ExpenseUserControl : UserControl
     private void LoadEmployees()
     {
         if (employeeService == null) return;
-        EmployeeComboHelper.Reload(comboBoxPhotoSendExpenses, employeeService.Employees.ToList(), nullComboBox, preserveSelection: false);
+        var wasEnabled = _cacheEnabled;
+        _cacheEnabled = false;
+        try
+        {
+            EmployeeComboHelper.Reload(comboBoxPhotoSendExpenses, employeeService.Employees.ToList(), nullComboBox, preserveSelection: false);
+        }
+        finally
+        {
+            _cacheEnabled = wasEnabled;
+        }
+        if (wasEnabled) RestoreCachedEmployee();
     }
 
     private async void OnSendClick(object? sender, EventArgs e)
@@ -239,36 +255,50 @@ public partial class ExpenseUserControl : UserControl
 
     private void SaveFieldToCache()
     {
-        if (isRestoringCache || formCache == null) return;
+        if (!_cacheEnabled || formCache == null) return;
 
         formCache.Set($"{CachePrefix}Amount", textBoxAmountExpenses.Text);
         formCache.Set($"{CachePrefix}Comment", textBoxCommentExpenses.Text);
         formCache.Set($"{CachePrefix}FromSafe", checkBoxFromSafeExpenses.Checked ? "1" : "0");
         formCache.Set($"{CachePrefix}PhotoSend", checkBoxPhotoSendExpenses.Checked ? "1" : "0");
+        var emp = comboBoxPhotoSendExpenses.SelectedItem as GrpcEmployee;
+        formCache.Set($"{CachePrefix}Employee", emp != null && emp != nullComboBox ? emp.Id : null);
     }
 
     private void RestoreCachedValues()
     {
         if (formCache == null) return;
 
-        isRestoringCache = true;
-        try
+        var amount = formCache.Get($"{CachePrefix}Amount");
+        if (!string.IsNullOrEmpty(amount)) textBoxAmountExpenses.Text = amount;
+
+        var comment = formCache.Get($"{CachePrefix}Comment");
+        if (!string.IsNullOrEmpty(comment)) textBoxCommentExpenses.Text = comment;
+
+        var fromSafe = formCache.Get($"{CachePrefix}FromSafe");
+        if (fromSafe != null) checkBoxFromSafeExpenses.Checked = fromSafe == "1";
+
+        var photoSend = formCache.Get($"{CachePrefix}PhotoSend");
+        if (photoSend != null) checkBoxPhotoSendExpenses.Checked = photoSend == "1";
+
+        RestoreCachedEmployee();
+    }
+
+    private void RestoreCachedEmployee()
+    {
+        if (formCache == null) return;
+
+        var cachedId = formCache.Get($"{CachePrefix}Employee");
+        if (string.IsNullOrWhiteSpace(cachedId)) return;
+
+        for (var j = 0; j < comboBoxPhotoSendExpenses.Items.Count; j++)
         {
-            var amount = formCache.Get($"{CachePrefix}Amount");
-            if (!string.IsNullOrEmpty(amount)) textBoxAmountExpenses.Text = amount;
-
-            var comment = formCache.Get($"{CachePrefix}Comment");
-            if (!string.IsNullOrEmpty(comment)) textBoxCommentExpenses.Text = comment;
-
-            var fromSafe = formCache.Get($"{CachePrefix}FromSafe");
-            if (fromSafe != null) checkBoxFromSafeExpenses.Checked = fromSafe == "1";
-
-            var photoSend = formCache.Get($"{CachePrefix}PhotoSend");
-            if (photoSend != null) checkBoxPhotoSendExpenses.Checked = photoSend == "1";
-        }
-        finally
-        {
-            isRestoringCache = false;
+            if (comboBoxPhotoSendExpenses.Items[j] is GrpcEmployee emp &&
+                string.Equals(emp.Id, cachedId, StringComparison.Ordinal))
+            {
+                comboBoxPhotoSendExpenses.SelectedIndex = j;
+                break;
+            }
         }
     }
 

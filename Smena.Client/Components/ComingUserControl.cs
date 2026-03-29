@@ -9,7 +9,7 @@ public partial class ComingUserControl : UserControl
 {
     private SafeService? _safeService;
     private FormCacheService? formCache;
-    private bool isRestoringCache;
+    private bool _cacheEnabled;
 
     private const string CachePrefix = "Coming.";
 
@@ -25,7 +25,12 @@ public partial class ComingUserControl : UserControl
         _safeService = safeService;
         this.formCache = formCache;
         SubscribeToEvents();
+    }
+
+    public void EnableCache()
+    {
         RestoreCachedValues();
+        _cacheEnabled = true;
     }
 
     public void UnsubscribeFromEvents()
@@ -122,7 +127,7 @@ public partial class ComingUserControl : UserControl
 
     private void SaveFieldToCache()
     {
-        if (isRestoringCache || formCache == null) return;
+        if (!_cacheEnabled || formCache == null) return;
 
         formCache.Set($"{CachePrefix}Amount", textBoxAmountPlusSafe.Text);
         formCache.Set($"{CachePrefix}Comment", textBoxCommentPlusAmount.Text);
@@ -132,19 +137,11 @@ public partial class ComingUserControl : UserControl
     {
         if (formCache == null) return;
 
-        isRestoringCache = true;
-        try
-        {
-            var amount = formCache.Get($"{CachePrefix}Amount");
-            if (!string.IsNullOrEmpty(amount)) textBoxAmountPlusSafe.Text = amount;
+        var amount = formCache.Get($"{CachePrefix}Amount");
+        if (!string.IsNullOrEmpty(amount)) textBoxAmountPlusSafe.Text = amount;
 
-            var comment = formCache.Get($"{CachePrefix}Comment");
-            if (!string.IsNullOrEmpty(comment)) textBoxCommentPlusAmount.Text = comment;
-        }
-        finally
-        {
-            isRestoringCache = false;
-        }
+        var comment = formCache.Get($"{CachePrefix}Comment");
+        if (!string.IsNullOrEmpty(comment)) textBoxCommentPlusAmount.Text = comment;
     }
 
     protected override void Dispose(bool disposing)

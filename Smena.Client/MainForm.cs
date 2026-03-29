@@ -42,10 +42,10 @@ internal partial class MainForm : MaterialForm
         materialSkinManager.AddFormToManage(this);
         materialSkinManager.Theme = MaterialSkinManager.Themes.DARK;
         materialSkinManager.ColorScheme = new ColorScheme(
-            Primary.Purple800,
-            Primary.Purple900,
-            Primary.Purple500,
-            Accent.Lime700,
+            Primary.DeepPurple700,
+            Primary.DeepPurple900,
+            Primary.DeepPurple400,
+            Accent.Cyan700,
             TextShade.WHITE
         );
 
@@ -60,6 +60,11 @@ internal partial class MainForm : MaterialForm
             await employeeService.LoadOrReloadListAsync();
         }
         catch { /* list stays empty; user can retry */ }
+
+        raportUserControl.EnableCache();
+        advanceUserControl1.EnableCache();
+        expenseUserControl1.EnableCache();
+        comingUserControl1.EnableCache();
 
         try
         {
@@ -87,12 +92,12 @@ internal partial class MainForm : MaterialForm
     {
         var tab = new TabPage("Сотрудники")
         {
-            BackColor = Color.FromArgb(40, 40, 40)
+            BackColor = Color.FromArgb(30, 18, 80)
         };
 
         var listBox = new ListBox
         {
-            BackColor = Color.FromArgb(40, 40, 40),
+            BackColor = Color.FromArgb(35, 25, 75),
             ForeColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Segoe UI", 12F),

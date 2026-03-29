@@ -209,7 +209,17 @@ public partial class RaportUserControl
         employeeSalaryCache.Clear();
 
         var employees = employeeService?.Employees.ToList() ?? [];
-        EmployeeComboHelper.ReloadAll(comboBoxes, employees, nullComboBox);
+        var wasEnabled = _cacheEnabled;
+        _cacheEnabled = false;
+        try
+        {
+            EmployeeComboHelper.ReloadAll(comboBoxes, employees, nullComboBox);
+        }
+        finally
+        {
+            _cacheEnabled = wasEnabled;
+        }
+        if (wasEnabled) RestoreCachedEmployees();
     }
 
     private void Event_SafeChanged(object? sender, long newSafe)

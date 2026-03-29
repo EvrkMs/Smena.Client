@@ -26,7 +26,7 @@ public partial class RaportUserControl : UserControl
     private readonly Dictionary<string, int> employeeSalaryCache = new(StringComparer.Ordinal);
     private bool isValidatingHours;
     private bool isValidatingMinus;
-    private bool isRestoringCache;
+    private bool _cacheEnabled;
 
     private const string CachePrefix = "Raport.";
 
@@ -56,7 +56,12 @@ public partial class RaportUserControl : UserControl
         this.formCache = formCache;
 
         SubscribeToEvents();
+    }
+
+    public void EnableCache()
+    {
         RestoreCachedValues();
+        _cacheEnabled = true;
     }
 
     public void UnsubscribeFromEvents()

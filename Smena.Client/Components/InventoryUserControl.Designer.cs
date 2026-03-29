@@ -42,7 +42,7 @@
             buttonSendInventory.TabIndex = 88;
             buttonSendInventory.Text = "Отправить инвент";
             buttonSendInventory.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
-            buttonSendInventory.UseAccentColor = false;
+            buttonSendInventory.UseAccentColor = true;
             buttonSendInventory.UseVisualStyleBackColor = true;
             // 
             // textBoxAmountInventory
@@ -65,7 +65,7 @@
             // 
             // listBoxNameInventory
             // 
-            listBoxNameInventory.BackColor = Color.FromArgb(40, 40, 40);
+            listBoxNameInventory.BackColor = Color.FromArgb(35, 25, 75);
             listBoxNameInventory.BorderStyle = BorderStyle.FixedSingle;
             listBoxNameInventory.Font = new Font("Segoe UI", 17.25F);
             listBoxNameInventory.ForeColor = Color.White;

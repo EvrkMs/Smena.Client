@@ -39,7 +39,7 @@
             buttonSendExpenses.TabIndex = 85;
             buttonSendExpenses.Text = "Отправить";
             buttonSendExpenses.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
-            buttonSendExpenses.UseAccentColor = false;
+            buttonSendExpenses.UseAccentColor = true;
             buttonSendExpenses.UseVisualStyleBackColor = true;
             // 
             // comboBoxPhotoSendExpenses

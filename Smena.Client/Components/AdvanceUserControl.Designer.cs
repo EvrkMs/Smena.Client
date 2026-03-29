@@ -78,7 +78,7 @@
             buttonSendExtractSalary.TabIndex = 10;
             buttonSendExtractSalary.Text = "Отправить";
             buttonSendExtractSalary.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
-            buttonSendExtractSalary.UseAccentColor = false;
+            buttonSendExtractSalary.UseAccentColor = true;
             buttonSendExtractSalary.UseVisualStyleBackColor = true;
             // 
             // checkBoxSalaryAdvance

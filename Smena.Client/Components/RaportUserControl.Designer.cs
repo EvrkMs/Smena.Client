@@ -39,7 +39,7 @@
             // 
             // listBoxSalaryRaport
             // 
-            listBoxSalaryRaport.BackColor = Color.FromArgb(40, 40, 40);
+            listBoxSalaryRaport.BackColor = Color.FromArgb(35, 25, 75);
             listBoxSalaryRaport.BorderStyle = BorderStyle.FixedSingle;
             listBoxSalaryRaport.Font = new Font("Segoe UI", 17.25F);
             listBoxSalaryRaport.ForeColor = Color.White;
@@ -134,7 +134,7 @@
             buttonСalculate.TabIndex = 113;
             buttonСalculate.Text = "Рассчитать";
             buttonСalculate.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
-            buttonСalculate.UseAccentColor = false;
+            buttonСalculate.UseAccentColor = true;
             // 
             // buttonSend
             // 
@@ -153,7 +153,7 @@
             buttonSend.TabIndex = 114;
             buttonSend.Text = "отправить";
             buttonSend.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
-            buttonSend.UseAccentColor = false;
+            buttonSend.UseAccentColor = true;
             // 
             // textBoxMinusSecondNameRaport
             // 
@@ -266,7 +266,7 @@
             // 
             // listBoxSendInformation
             // 
-            listBoxSendInformation.BackColor = Color.FromArgb(40, 40, 40);
+            listBoxSendInformation.BackColor = Color.FromArgb(35, 25, 75);
             listBoxSendInformation.BorderStyle = BorderStyle.FixedSingle;
             listBoxSendInformation.Font = new Font("Segoe UI", 17.25F);
             listBoxSendInformation.ForeColor = Color.White;
@@ -279,7 +279,7 @@
             // 
             // listBoxRaport
             // 
-            listBoxRaport.BackColor = Color.FromArgb(40, 40, 40);
+            listBoxRaport.BackColor = Color.FromArgb(35, 25, 75);
             listBoxRaport.BorderStyle = BorderStyle.FixedSingle;
             listBoxRaport.Font = new Font("Segoe UI", 17.25F);
             listBoxRaport.ForeColor = Color.White;
