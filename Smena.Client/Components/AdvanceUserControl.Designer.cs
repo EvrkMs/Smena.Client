@@ -69,12 +69,12 @@
             buttonSendExtractSalary.Depth = 0;
             buttonSendExtractSalary.HighEmphasis = true;
             buttonSendExtractSalary.Icon = null;
-            buttonSendExtractSalary.Location = new Point(358, 628);
+            buttonSendExtractSalary.Location = new Point(358, 170);
             buttonSendExtractSalary.Margin = new Padding(4, 6, 4, 6);
             buttonSendExtractSalary.MouseState = MaterialSkin.MouseState.HOVER;
             buttonSendExtractSalary.Name = "buttonSendExtractSalary";
             buttonSendExtractSalary.NoAccentTextColor = Color.Empty;
-            buttonSendExtractSalary.Size = new Size(108, 36);
+            buttonSendExtractSalary.Size = new Size(200, 36);
             buttonSendExtractSalary.TabIndex = 10;
             buttonSendExtractSalary.Text = "Отправить";
             buttonSendExtractSalary.Type = MaterialSkin.Controls.MaterialButton.MaterialButtonType.Contained;
@@ -149,7 +149,7 @@
             Controls.Add(checkBoxAdvanceExtract);
             Controls.Add(textBoxSalaryExtractAmount);
             Name = "AdvanceUserControl";
-            Size = new Size(624, 682);
+            Size = new Size(640, 230);
             ResumeLayout(false);
             PerformLayout();
         }
