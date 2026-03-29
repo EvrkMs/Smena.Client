@@ -7,6 +7,8 @@ public class AdvanceService(GrpcService grpcService)
 {
     private readonly GrpcAdvanceService.GrpcAdvanceServiceClient _client = new(grpcService.CallInvoker);
 
-    public Task<(bool Success, string Message)> SendAdvanceAsync(GrpcAdvanceRequest request)
-        => GrpcCallHelper.CallAsync(() => _client.SendAdvanceAsync(request).ResponseAsync);
+    public Task<(bool Success, string Message)> SendAdvanceAsync(
+        GrpcAdvanceRequest request,
+        CancellationToken ct = default)
+        => GrpcCallHelper.CallAsync(() => _client.SendAdvanceAsync(request, cancellationToken: ct).ResponseAsync);
 }

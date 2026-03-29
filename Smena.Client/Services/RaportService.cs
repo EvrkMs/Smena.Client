@@ -7,8 +7,11 @@ public class RaportService(GrpcService grpcService)
 {
     private readonly GrpcRaportService.GrpcRaportServiceClient _client = new(grpcService.CallInvoker);
 
-    public Task<(bool Success, string Message)> SendRaportAsync(GrpcRaportRequest request)
+    public Task<(bool Success, string Message)> SendRaportAsync(
+        GrpcRaportRequest request,
+        CancellationToken ct = default)
         => GrpcCallHelper.CallAsync(() => _client.SendRaportAsync(
             request,
-            deadline: DateTime.UtcNow.Add(ShiftConstants.PhotoStreamTimeout)).ResponseAsync);
+            deadline: DateTime.UtcNow.Add(ShiftConstants.PhotoStreamTimeout),
+            cancellationToken: ct).ResponseAsync);
 }

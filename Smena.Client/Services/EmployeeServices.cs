@@ -10,11 +10,11 @@ public class EmployeeService(GrpcService grpcService)
     private readonly GrpcEmployeeService.GrpcEmployeeServiceClient _client = new(grpcService.CallInvoker);
     public BindingList<GrpcEmployee> Employees { get; } = [];
 
-    public async Task LoadOrReloadListAsync()
+    public async Task LoadOrReloadListAsync(CancellationToken ct = default)
     {
         try
         {
-            var response = await _client.EmployeesListAsync(new Empty());
+            var response = await _client.EmployeesListAsync(new Empty(), cancellationToken: ct);
             if (response?.Employees == null) return;
 
             var items = response.Employees.ToList();
@@ -40,17 +40,19 @@ public class EmployeeService(GrpcService grpcService)
         }
     }
 
-    public async Task<(bool Success, string Message)> AddEmployeeAsync(GrpcEmployee employee)
+    public async Task<(bool Success, string Message)> AddEmployeeAsync(
+        GrpcEmployee employee,
+        CancellationToken ct = default)
     {
         try
         {
-            var res = await _client.EmployeeAddAsync(employee);
+            var res = await _client.EmployeeAddAsync(employee, cancellationToken: ct);
             if (res == null || !res.Success)
             {
                 return (false, res?.Message ?? "Server returned empty response");
             }
 
-            await LoadOrReloadListAsync();
+            await LoadOrReloadListAsync(ct);
             return (true, res.Message ?? string.Empty);
         }
         catch (Exception ex)
