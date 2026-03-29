@@ -1,15 +1,13 @@
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Text;
+using System.Text.Json;
 
 namespace Smena.Client.Services;
 
 /// <summary>
-/// Lightweight async CSV cache for form field values.
-/// Stores data in %LOCALAPPDATA%/Smena.Client/form-cache.csv so that
+/// Lightweight cache for form field values.
+/// Stores data in %LOCALAPPDATA%/Smena.Client/form-cache.json so that
 /// form inputs survive application restarts without blocking the UI.
-/// 
-/// CSV format: Key,Value (both fields are escaped if they contain comma/quote/newline).
 /// </summary>
 public sealed class FormCacheService : IDisposable
 {
@@ -18,7 +16,12 @@ public sealed class FormCacheService : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Smena.Client");
 
-    private static readonly string CachePath = Path.Combine(CacheDir, "form-cache.csv");
+    private static readonly string CachePath = Path.Combine(CacheDir, "form-cache.json");
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true
+    };
 
     private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _writeLock = new();
@@ -36,9 +39,6 @@ public sealed class FormCacheService : IDisposable
         _flushTimer.Start();
     }
 
-    /// <summary>
-    /// Set a cached value. Non-blocking; actual write is deferred.
-    /// </summary>
     public void Set(string key, string? value)
     {
         if (string.IsNullOrWhiteSpace(key)) return;
@@ -55,17 +55,11 @@ public sealed class FormCacheService : IDisposable
         _dirty = true;
     }
 
-    /// <summary>
-    /// Get a cached text value, or null if missing.
-    /// </summary>
     public string? Get(string key)
     {
         return _cache.TryGetValue(key, out var val) ? val : null;
     }
 
-    /// <summary>
-    /// Get a cached integer value (e.g., selected index), or defaultValue if missing/invalid.
-    /// </summary>
     public int GetInt(string key, int defaultValue = -1)
     {
         if (_cache.TryGetValue(key, out var val) &&
@@ -77,18 +71,11 @@ public sealed class FormCacheService : IDisposable
         return defaultValue;
     }
 
-    /// <summary>
-    /// Set a cached integer value (e.g., ComboBox selected index).
-    /// </summary>
     public void SetInt(string key, int value)
     {
         Set(key, value.ToString(CultureInfo.InvariantCulture));
     }
 
-    /// <summary>
-    /// Remove all cached values whose keys start with the given prefix.
-    /// Useful for clearing a whole tab/form section.
-    /// </summary>
     public void ClearPrefix(string prefix)
     {
         foreach (var key in _cache.Keys)
@@ -102,13 +89,7 @@ public sealed class FormCacheService : IDisposable
         _dirty = true;
     }
 
-    /// <summary>
-    /// Force an immediate flush to disk. Call on form close.
-    /// </summary>
-    public void Flush()
-    {
-        FlushToDisk();
-    }
+    public void Flush() => FlushToDisk();
 
     public void Dispose()
     {
@@ -119,7 +100,7 @@ public sealed class FormCacheService : IDisposable
         FlushToDisk();
     }
 
-    // ── CSV I/O ─────────────────────────────────────────────────
+    // ── JSON I/O ────────────────────────────────────────────────
 
     private void LoadFromDisk()
     {
@@ -127,16 +108,13 @@ public sealed class FormCacheService : IDisposable
 
         try
         {
-            var lines = File.ReadAllLines(CachePath, Encoding.UTF8);
-            foreach (var line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
+            var json = File.ReadAllBytes(CachePath);
+            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            if (dict == null) return;
 
-                var (key, value) = ParseCsvLine(line);
-                if (!string.IsNullOrEmpty(key))
-                {
-                    _cache[key] = value;
-                }
+            foreach (var kvp in dict)
+            {
+                _cache[kvp.Key] = kvp.Value;
             }
         }
         catch
@@ -159,107 +137,17 @@ public sealed class FormCacheService : IDisposable
         {
             Directory.CreateDirectory(CacheDir);
 
-            var sb = new StringBuilder();
-            foreach (var kvp in _cache)
-            {
-                sb.Append(EscapeCsv(kvp.Key));
-                sb.Append(',');
-                sb.Append(EscapeCsv(kvp.Value));
-                sb.AppendLine();
-            }
+            var snapshot = new Dictionary<string, string>(_cache, StringComparer.OrdinalIgnoreCase);
+            var json = JsonSerializer.Serialize(snapshot, JsonOptions);
 
             lock (_writeLock)
             {
-                File.WriteAllText(CachePath, sb.ToString(), Encoding.UTF8);
+                File.WriteAllText(CachePath, json);
             }
         }
         catch
         {
             // Best-effort: don't crash if disk is unavailable.
         }
-    }
-
-    // ── CSV helpers ─────────────────────────────────────────────
-
-    private static string EscapeCsv(string field)
-    {
-        if (field.Contains(',') || field.Contains('"') || field.Contains('\n') || field.Contains('\r'))
-        {
-            return "\"" + field.Replace("\"", "\"\"") + "\"";
-        }
-
-        return field;
-    }
-
-    private static (string Key, string Value) ParseCsvLine(string line)
-    {
-        var fields = new List<string>(2);
-        var sb = new StringBuilder();
-        var inQuotes = false;
-
-        for (var i = 0; i < line.Length; i++)
-        {
-            var ch = line[i];
-
-            if (inQuotes)
-            {
-                if (ch == '"')
-                {
-                    if (i + 1 < line.Length && line[i + 1] == '"')
-                    {
-                        sb.Append('"');
-                        i++; // skip escaped quote
-                    }
-                    else
-                    {
-                        inQuotes = false;
-                    }
-                }
-                else
-                {
-                    sb.Append(ch);
-                }
-            }
-            else
-            {
-                if (ch == '"')
-                {
-                    inQuotes = true;
-                }
-                else if (ch == ',')
-                {
-                    fields.Add(sb.ToString());
-                    sb.Clear();
-                    if (fields.Count == 1)
-                    {
-                        // Rest of line is value
-                        var rest = line[(i + 1)..];
-                        fields.Add(UnescapeCsvField(rest));
-                        return (fields[0], fields[1]);
-                    }
-                }
-                else
-                {
-                    sb.Append(ch);
-                }
-            }
-        }
-
-        fields.Add(sb.ToString());
-
-        return fields.Count >= 2
-            ? (fields[0], fields[1])
-            : (fields.Count == 1 ? (fields[0], string.Empty) : (string.Empty, string.Empty));
-    }
-
-    private static string UnescapeCsvField(string raw)
-    {
-        var trimmed = raw.Trim();
-        if (trimmed.StartsWith('"') && trimmed.EndsWith('"') && trimmed.Length >= 2)
-        {
-            return trimmed[1..^1].Replace("\"\"", "\"");
-        }
-
-        return raw;
     }
 }

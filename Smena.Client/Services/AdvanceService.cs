@@ -1,31 +1,12 @@
-﻿using Grpc.Core;
-using Host.Grpc.Services.Advance;
+﻿using Host.Grpc.Services.Advance;
+using Smena.Client.Helpers;
 
 namespace Smena.Client.Services;
 
-public class AdvanceService
+public class AdvanceService(GrpcService grpcService)
 {
-    private readonly GrpcAdvanceService.GrpcAdvanceServiceClient _client;
+    private readonly GrpcAdvanceService.GrpcAdvanceServiceClient _client = new(grpcService.CallInvoker);
 
-    public AdvanceService(GrpcService grpcService)
-    {
-        _client = new(grpcService.CallInvoker);
-    }
-
-    public async Task<(bool Success, string Message)> SendAdvanceAsync(GrpcAdvanceRequest request)
-    {
-        try
-        {
-            var response = await _client.SendAdvanceAsync(request);
-            return (response.Success, response.Message);
-        }
-        catch (RpcException ex)
-        {
-            return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            return (false, $"Error: {ex.Message}");
-        }
-    }
+    public Task<(bool Success, string Message)> SendAdvanceAsync(GrpcAdvanceRequest request)
+        => GrpcCallHelper.CallAsync(() => _client.SendAdvanceAsync(request).ResponseAsync);
 }

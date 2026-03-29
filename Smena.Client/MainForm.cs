@@ -66,6 +66,8 @@ internal partial class MainForm : MaterialForm
             await safeService.RefreshCurrentSafeAsync();
         }
         catch { /* safe stays 0; explicit refresh will update later */ }
+
+        safeService.StartSubscription();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)

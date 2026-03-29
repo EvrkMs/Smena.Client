@@ -1,31 +1,12 @@
-﻿using Grpc.Core;
-using Host.Grpc.Services.Inventory;
+﻿using Host.Grpc.Services.Inventory;
+using Smena.Client.Helpers;
 
 namespace Smena.Client.Services;
 
-public class InventoryService
+public class InventoryService(GrpcService grpcService)
 {
-    private readonly GrpcInventoryService.GrpcInventoryServiceClient _client;
+    private readonly GrpcInventoryService.GrpcInventoryServiceClient _client = new(grpcService.CallInvoker);
 
-    public InventoryService(GrpcService grpcService)
-    {
-        _client = new(grpcService.CallInvoker);
-    }
-
-    public async Task<(bool Success, string Message)> SendInventoryAsync(GrpcInventoryRequest request)
-    {
-        try
-        {
-            var response = await _client.SendInventoryAsync(request);
-            return (response.Success, response.Message);
-        }
-        catch (RpcException ex)
-        {
-            return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            return (false, $"Error: {ex.Message}");
-        }
-    }
+    public Task<(bool Success, string Message)> SendInventoryAsync(GrpcInventoryRequest request)
+        => GrpcCallHelper.CallAsync(() => _client.SendInventoryAsync(request).ResponseAsync);
 }

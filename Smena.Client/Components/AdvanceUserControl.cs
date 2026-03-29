@@ -109,25 +109,7 @@ public partial class AdvanceUserControl : UserControl
     private void LoadEmployees()
     {
         if (employeeService == null) return;
-
-        var employees = employeeService.Employees.ToList();
-        var selectedId = (comboBoxExtractSalaryName.SelectedItem as GrpcEmployee)?.Id;
-
-        comboBoxExtractSalaryName.DataSource = null;
-        comboBoxExtractSalaryName.DisplayMember = nameof(GrpcEmployee.Name);
-        comboBoxExtractSalaryName.ValueMember = nameof(GrpcEmployee.Id);
-
-        List<GrpcEmployee> list = [nullComboBox, .. employees];
-        comboBoxExtractSalaryName.DataSource = list;
-
-        if (selectedId != null)
-        {
-            var employee = employees.FirstOrDefault(e => e.Id == selectedId);
-            if (employee != null)
-            {
-                comboBoxExtractSalaryName.SelectedItem = employee;
-            }
-        }
+        EmployeeComboHelper.Reload(comboBoxExtractSalaryName, employeeService.Employees.ToList(), nullComboBox);
     }
 
     private async void OnSendClick(object? sender, EventArgs e)

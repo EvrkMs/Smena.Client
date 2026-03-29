@@ -1,17 +1,11 @@
 ﻿using Grpc.Core;
 using Host.Grpc.Services.SendPhoto;
-using System;
 
 namespace Smena.Client.Services;
 
-public class PhotoService
+public class PhotoService(GrpcService grpcService)
 {
-    private readonly SendPhotoService.SendPhotoServiceClient _client;
-
-    public PhotoService(GrpcService grpcService)
-    {
-        _client = new(grpcService.CallInvoker);
-    }
+    private readonly SendPhotoService.SendPhotoServiceClient _client = new(grpcService.CallInvoker);
 
     public async Task<(bool Success, string Message, string? SessionKey)> RequestPhotosAsync(
         string employeeId,
@@ -23,7 +17,7 @@ public class PhotoService
             var request = new RequestPhotosRequest { EmployeeId = employeeId };
             using var call = _client.RequestPhotos(
                 request,
-                deadline: DateTime.UtcNow.AddMinutes(5),
+                deadline: DateTime.UtcNow.Add(ShiftConstants.PhotoStreamTimeout),
                 cancellationToken: ct);
 
             await foreach (var update in call.ResponseStream.ReadAllAsync(ct))

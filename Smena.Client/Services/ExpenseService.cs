@@ -1,31 +1,12 @@
-﻿using Grpc.Core;
-using Host.Grpc.Services.Expense;
+﻿using Host.Grpc.Services.Expense;
+using Smena.Client.Helpers;
 
 namespace Smena.Client.Services;
 
-public class ExpenseService
+public class ExpenseService(GrpcService grpcService)
 {
-    private readonly GrpcExpense.GrpcExpenseClient _client;
+    private readonly GrpcExpense.GrpcExpenseClient _client = new(grpcService.CallInvoker);
 
-    public ExpenseService(GrpcService grpcService)
-    {
-        _client = new(grpcService.CallInvoker);
-    }
-
-    public async Task<(bool Success, string Message)> AddExpenseOperationAsync(GrpcExpenseAdd request)
-    {
-        try
-        {
-            var response = await _client.AddExpenseOperationAsync(request);
-            return (response.Success, response.Message);
-        }
-        catch (RpcException ex)
-        {
-            return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            return (false, $"Error: {ex.Message}");
-        }
-    }
+    public Task<(bool Success, string Message)> AddExpenseOperationAsync(GrpcExpenseAdd request)
+        => GrpcCallHelper.CallAsync(() => _client.AddExpenseOperationAsync(request).ResponseAsync);
 }

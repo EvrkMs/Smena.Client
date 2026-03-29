@@ -17,7 +17,7 @@ public class GrpcService : IDisposable, IAsyncDisposable
         _httpClient = new HttpClient
         {
             // Closing shift may include photo and Telegram operations that exceed the default 100s timeout.
-            Timeout = TimeSpan.FromMinutes(6)
+            Timeout = ShiftConstants.GrpcHttpTimeout
         };
         if (!string.IsNullOrWhiteSpace(apiKey))
         {

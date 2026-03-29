@@ -1,24 +1,15 @@
 ﻿using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
-using Host.Grpc.Common;
 using Host.Grpc.Services.Employee;
+using Smena.Client.Helpers;
 using System.ComponentModel;
 
 namespace Smena.Client.Services;
 
-public class EmployeeService
+public class EmployeeService(GrpcService grpcService)
 {
-    private readonly GrpcEmployeeService.GrpcEmployeeServiceClient _client;
+    private readonly GrpcEmployeeService.GrpcEmployeeServiceClient _client = new(grpcService.CallInvoker);
     public BindingList<GrpcEmployee> Employees { get; } = [];
 
-    public EmployeeService(GrpcService grpcService)
-    {
-        _client = new(grpcService.CallInvoker);
-    }
-
-    /// <summary>
-    /// Must be called from the UI thread (or via Invoke) to safely update Employees.
-    /// </summary>
     public async Task LoadOrReloadListAsync()
     {
         try
@@ -26,7 +17,6 @@ public class EmployeeService
             var response = await _client.EmployeesListAsync(new Empty());
             if (response?.Employees == null) return;
 
-            // Build the list off-thread, then swap on the current (UI) context.
             var items = response.Employees.ToList();
 
             Employees.RaiseListChangedEvents = false;
@@ -44,7 +34,7 @@ public class EmployeeService
                 Employees.ResetBindings();
             }
         }
-        catch (RpcException)
+        catch
         {
             // Silently ignore on load — the list stays empty.
         }
@@ -69,30 +59,15 @@ public class EmployeeService
         }
     }
 
-    public async Task<(bool Success, int CurrentSalary, string Message)> GetCurrentSalaryAsync(
+    public Task<(bool Success, int CurrentSalary, string Message)> GetCurrentSalaryAsync(
         string employeeId,
         CancellationToken ct = default)
-    {
-        try
-        {
-            var response = await _client.EmployeeCurrentSalaryAsync(
+        => GrpcCallHelper.CallAsync(
+            () => _client.EmployeeCurrentSalaryAsync(
                 new GrpcEmployeeSalaryRequest { EmployeeId = employeeId },
-                cancellationToken: ct);
-
-            if (response == null)
-            {
-                return (false, 0, "Server returned empty response.");
-            }
-
-            return (true, (int)response.CurrentSalary, string.Empty);
-        }
-        catch (RpcException ex)
-        {
-            return (false, 0, $"gRPC: {ex.StatusCode} - {ex.Status.Detail}");
-        }
-        catch (Exception ex)
-        {
-            return (false, 0, ex.Message);
-        }
-    }
+                cancellationToken: ct).ResponseAsync,
+            response => response == null
+                ? (false, 0, "Server returned empty response.")
+                : (true, (int)response.CurrentSalary, string.Empty),
+            error => (false, 0, error));
 }

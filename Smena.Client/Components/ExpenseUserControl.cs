@@ -95,15 +95,7 @@ public partial class ExpenseUserControl : UserControl
     private void LoadEmployees()
     {
         if (employeeService == null) return;
-
-        var employees = employeeService.Employees.ToList();
-
-        comboBoxPhotoSendExpenses.DataSource = null;
-        comboBoxPhotoSendExpenses.DisplayMember = nameof(GrpcEmployee.Name);
-        comboBoxPhotoSendExpenses.ValueMember = nameof(GrpcEmployee.Id);
-
-        List<GrpcEmployee> list = [nullComboBox, .. employees];
-        comboBoxPhotoSendExpenses.DataSource = list;
+        EmployeeComboHelper.Reload(comboBoxPhotoSendExpenses, employeeService.Employees.ToList(), nullComboBox, preserveSelection: false);
     }
 
     private async void OnSendClick(object? sender, EventArgs e)

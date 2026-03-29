@@ -1,7 +1,7 @@
 ﻿using Host.Grpc.Services.Employee;
-using Host.Grpc.Services.Raport;
 using MaterialSkin.Controls;
 using Smena.Client.Helpers;
+using Smena.Client.Models;
 using Smena.Client.Services;
 using System.ComponentModel;
 
@@ -9,44 +9,6 @@ namespace Smena.Client.Components;
 
 public partial class RaportUserControl : UserControl
 {
-    #region Nested Types
-    public class EmployeeHoursList
-    {
-        public GrpcEmployee? Employee { get; set; }
-        public int Hours { get; set; }
-        public int Minus { get; set; }
-        public int HourlyRate => Employee?.HourlyRate ?? 0;
-        public int Salary => (Hours * HourlyRate) - Minus;
-
-        public string SalaryInfo => this.ToString();
-
-        public override string ToString() =>
-            Employee?.Name != null ? $"{Employee.Name} - {Salary} руб." : "";
-    }
-
-    public class ReportData
-    {
-        public DateTime Date { get; set; }
-        public int FactCash { get; set; }
-        public int FactNonCash { get; set; }
-        public int Revenue { get; set; }
-        public int Total { get; set; }
-        public int CashDiscrepancy { get; set; }
-        public int SafeDiscrepancy { get; set; }
-        public int FactSafe { get; set; }
-        public int NewSafe { get; set; }
-        public int ProgramCash { get; set; }
-        public int ProgramNonCash { get; set; }
-        public long ProgramSafe { get; set; }
-        public List<EmployeeHoursList> Employees { get; set; } = [];
-        public int TotalSalary { get; set; }
-
-        public const int InitialCash = 1000;
-    }
-    #endregion
-
-    #region Fields
-
     private EmployeeService? employeeService;
     private SafeService? safeService;
     private RaportService? raportService;
@@ -58,19 +20,15 @@ public partial class RaportUserControl : UserControl
     private readonly List<MaterialTextBox> numericTextBoxes = [];
     private readonly GrpcEmployee nullComboBox = new() { Name = "Нет" };
     private readonly BindingList<EmployeeHoursList> employeesData = [];
-    private bool isUpdating = false;
-    private bool isNormalizingInput = false;
+    private bool isUpdating;
+    private bool isNormalizingInput;
     private readonly Dictionary<MaterialTextBox, string> previousHoursValues = [];
     private readonly Dictionary<string, int> employeeSalaryCache = new(StringComparer.Ordinal);
-    private bool isValidatingHours = false;
-    private bool isValidatingMinus = false;
-    private bool isRestoringCache = false;
+    private bool isValidatingHours;
+    private bool isValidatingMinus;
+    private bool isRestoringCache;
 
     private const string CachePrefix = "Raport.";
-
-    #endregion
-
-    #region Constructors
 
     public RaportUserControl()
     {
@@ -78,11 +36,12 @@ public partial class RaportUserControl : UserControl
         InitializeCollections();
     }
 
-    #endregion
-
-    #region Public API
-
-    public void Initialize(EmployeeService employeeService, SafeService safeService, RaportService raportService, PhotoService photoService, FormCacheService formCache)
+    public void Initialize(
+        EmployeeService employeeService,
+        SafeService safeService,
+        RaportService raportService,
+        PhotoService photoService,
+        FormCacheService formCache)
     {
         ArgumentNullException.ThrowIfNull(employeeService);
         ArgumentNullException.ThrowIfNull(safeService);
@@ -115,7 +74,6 @@ public partial class RaportUserControl : UserControl
 
     public ReportData GenerateReport()
     {
-        // Keep report math deterministic: always read the latest values from UI inputs.
         RebuildEmployeesList();
 
         var report = new ReportData
@@ -145,204 +103,7 @@ public partial class RaportUserControl : UserControl
         return report;
     }
 
-    #endregion
-
-    #region Event Handlers
-
-    private async void OnCalculateClick(object? sender, EventArgs e)
-    {
-        await RefreshSafeFromServerAsync();
-
-        if (employeesData.Count == 0)
-        {
-            MessageBox.Show(
-                "Выберите хотя бы одного сотрудника!",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-            return;
-        }
-
-        var report = GenerateReport();
-        if (!ConfirmSafeDiscrepancy(report, isSendAction: false))
-        {
-            return;
-        }
-
-        if (!ValidateMinusTotals(report, showMessage: true))
-        {
-            return;
-        }
-
-        if (!await ValidateEmployeeMinusRulesAsync(showMessage: true))
-        {
-            return;
-        }
-
-        UpdateReportPreview(null, EventArgs.Empty);
-
-        MessageBox.Show(
-            "Расчёт выполнен успешно! Проверьте данные и нажмите 'Отправить' для отправки отчёта.",
-            "Расчёт завершён",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information
-        );
-    }
-
-    private async void OnSendClick(object? sender, EventArgs e)
-    {
-        await RefreshSafeFromServerAsync();
-
-        if (employeesData.Count == 0)
-        {
-            MessageBox.Show(
-                "Выберите хотя бы одного сотрудника!",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-            return;
-        }
-
-        var report = GenerateReport();
-        if (!ConfirmSafeDiscrepancy(report, isSendAction: true))
-        {
-            return;
-        }
-
-        // Показываем подтверждение с итоговыми данными
-        var totalMinusCash = Math.Abs(report.CashDiscrepancy);
-        var totalMinusSafe = report.SafeDiscrepancy < 0 ? -report.SafeDiscrepancy : 0;
-        var totalMinusEntered = employeesData.Sum(e => e.Minus);
-        var totalMinusExpected = totalMinusCash + totalMinusSafe;
-
-        if (!ValidateMinusTotals(report, showMessage: true))
-        {
-            return;
-        }
-
-        if (!await ValidateEmployeeMinusRulesAsync(showMessage: true))
-        {
-            return;
-        }
-
-        var confirmMessage = $"Отчёт за смену:\n\n" +
-                           $"Выручка: {report.Revenue} руб.\n" +
-                           $"ЗП сотрудников: {report.TotalSalary} руб.\n" +
-                           $"Итог: {report.Total} руб.\n\n";
-
-        if (totalMinusCash > 0 || totalMinusSafe > 0)
-        {
-            confirmMessage += $"Минус по кассе: {totalMinusCash} руб.\n" +
-                            $"Минус по сейфу: {totalMinusSafe} руб.\n" +
-                            $"Всего минусов: {totalMinusCash + totalMinusSafe} руб.\n" +
-                            $"Указано минусов: {totalMinusEntered} руб.\n\n";
-        }
-
-        confirmMessage += "Отправить отчёт?";
-
-        var result = MessageBox.Show(
-            confirmMessage,
-            "Подтверждение отправки",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question
-        );
-
-        if (result != DialogResult.Yes)
-            return;
-
-        listBoxSendInformation.Items.Clear();
-        string? photoSessionKey = null;
-        var firstEmployee = employeesData.FirstOrDefault()?.Employee;
-        if (firstEmployee == null)
-        {
-            MessageBox.Show(
-                "Выберите первого сотрудника для получения фото.",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-            return;
-        }
-
-        buttonSend.Enabled = false;
-        buttonСalculate.Enabled = false;
-
-        try
-        {
-            var photoResult = await photoService!.RequestPhotosAsync(
-                firstEmployee.Id,
-                message => AddSendInfo(message));
-
-            if (!photoResult.Success || string.IsNullOrWhiteSpace(photoResult.SessionKey))
-            {
-                MessageBox.Show(
-                    photoResult.Message,
-                    "Ошибка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-                return;
-            }
-
-            photoSessionKey = photoResult.SessionKey;
-
-            var request = new GrpcRaportRequest
-            {
-                FactCash = report.FactCash,
-                FactNonCash = report.FactNonCash,
-                ProgramCash = report.ProgramCash,
-                ProgramNonCash = report.ProgramNonCash,
-                FactSafe = report.FactSafe,
-                WhyMinus = textBoxWhyMinus.Text,
-                SendPhoto = true,
-                PhotoSessionKey = photoSessionKey ?? string.Empty
-            };
-
-            foreach (var emp in report.Employees)
-            {
-                request.Employees.Add(new EmployeeRaportSalary
-                {
-                    EmployeeId = emp.Employee?.Id ?? "",
-                    Hours = emp.Hours,
-                    Minus = emp.Minus,
-                });
-            }
-
-            var (success, message) = await raportService!.SendRaportAsync(request);
-
-            if (success)
-            {
-                MessageBox.Show(
-                    message,
-                    "Успех",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information
-                );
-
-                ClearAllFields();
-            }
-            else
-            {
-                MessageBox.Show(
-                    message,
-                    "Ошибка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-            }
-        }
-        finally
-        {
-            buttonSend.Enabled = true;
-            buttonСalculate.Enabled = true;
-        }
-    }
-
-    #endregion
-
-    #region Private Methods
+    // ── Event wiring ────────────────────────────────────────────
 
     private void InitializeCollections()
     {
@@ -407,7 +168,6 @@ public partial class RaportUserControl : UserControl
             textBox.TextChanged += SaveFieldToCache;
         }
 
-        // Also cache the "why minus" free-text field
         textBoxWhyMinus.TextChanged += SaveFieldToCache;
 
         foreach (var hoursBox in hoursTextBoxes)
@@ -460,479 +220,7 @@ public partial class RaportUserControl : UserControl
         }
     }
 
-    private void FilterNumericInputRaport(object? sender, KeyPressEventArgs e)
-    {
-        if (sender is not MaterialTextBox textBox) return;
-        bool isHoursField = hoursTextBoxes.Contains(textBox);
-        InputHelper.FilterNumericInput(sender, e, isHoursField ? 2 : 6);
-    }
-
-    private void NormalizeNumericInput(object? sender, EventArgs e)
-    {
-        if (isNormalizingInput || sender is not MaterialTextBox textBox)
-        {
-            return;
-        }
-
-        var text = textBox.Text ?? string.Empty;
-        var digitsOnly = new string(text.Where(char.IsDigit).ToArray());
-
-        if (digitsOnly == text)
-        {
-            return;
-        }
-
-        isNormalizingInput = true;
-        try
-        {
-            textBox.Text = digitsOnly;
-            textBox.SelectionStart = digitsOnly.Length;
-        }
-        finally
-        {
-            isNormalizingInput = false;
-        }
-    }
-
-    private void ValidateTotalHours(object? sender, EventArgs e)
-    {
-        if (isValidatingHours || sender is not MaterialTextBox changedBox) return;
-
-        const int MaxTotalHours = 12;
-
-        int totalHours = 0;
-        for (int i = 0; i < hoursTextBoxes.Count; i++)
-        {
-            if (!IsRowActive(i))
-            {
-                continue;
-            }
-
-            if (int.TryParse(hoursTextBoxes[i].Text, out var hours))
-            {
-                totalHours += hours;
-            }
-        }
-
-        if (totalHours > MaxTotalHours)
-        {
-            isValidatingHours = true;
-            try
-            {
-                if (previousHoursValues.TryGetValue(changedBox, out var prevValue))
-                {
-                    changedBox.Text = prevValue;
-                }
-                else
-                {
-                    changedBox.Clear();
-                }
-
-                MessageBox.Show(
-                    $"Суммарное количество часов не может превышать {MaxTotalHours} часов!",
-                    "Ограничение по часам",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-            }
-            finally
-            {
-                isValidatingHours = false;
-            }
-        }
-        else
-        {
-            previousHoursValues[changedBox] = changedBox.Text;
-        }
-    }
-
-    private async void ValidateMinusInputAsync(object? sender, EventArgs e)
-    {
-        if (isValidatingMinus || isNormalizingInput || sender is not MaterialTextBox minusBox)
-        {
-            return;
-        }
-
-        var index = minusTextBoxes.IndexOf(minusBox);
-        if (index < 0 || employeeService == null)
-        {
-            return;
-        }
-
-        if (!IsRowActive(index) ||
-            comboBoxes[index].SelectedItem is not GrpcEmployee employee ||
-            employee == nullComboBox)
-        {
-            return;
-        }
-
-        if (!int.TryParse(minusBox.Text, out var minus) || minus <= 0)
-        {
-            return;
-        }
-
-        var salaryCheck = await GetCurrentSalaryAsync(employee.Id);
-        if (!salaryCheck.Success || salaryCheck.CurrentSalary >= 0)
-        {
-            return;
-        }
-
-        var hours = int.TryParse(hoursTextBoxes[index].Text, out var parsedHours) ? parsedHours : 0;
-        var effectiveHourlyRate = GetEffectiveHourlyRate(employee);
-        var maxMinus = hours * effectiveHourlyRate;
-        if (minus <= maxMinus)
-        {
-            return;
-        }
-
-        isValidatingMinus = true;
-        try
-        {
-            minusBox.Text = maxMinus.ToString();
-            minusBox.SelectionStart = minusBox.TextLength;
-
-            MessageBox.Show(
-                $"Для сотрудника {employee.Name} текущая ЗП отрицательная ({salaryCheck.CurrentSalary} руб.).\n" +
-                $"Минус ограничен {maxMinus} руб. (часы {hours} * ставка {effectiveHourlyRate}).",
-                "Ограничение минуса",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning
-            );
-        }
-        finally
-        {
-            isValidatingMinus = false;
-        }
-    }
-
-    private void Event_ListEmployeeChange(object? sender, ListChangedEventArgs e)
-    {
-        if (InvokeRequired)
-        {
-            Invoke(() => Event_ListEmployeeChange(sender, e));
-            return;
-        }
-
-        employeeSalaryCache.Clear();
-
-        var employees = employeeService?.Employees.ToList() ?? [];
-
-        var selectedIds = comboBoxes
-            .Select(cb => (cb.SelectedItem as GrpcEmployee)?.Id)
-            .ToList();
-
-        foreach (var comboBox in comboBoxes)
-        {
-            comboBox.DataSource = null;
-            comboBox.DisplayMember = nameof(GrpcEmployee.Name);
-            comboBox.ValueMember = nameof(GrpcEmployee.Id);
-
-            List<GrpcEmployee> list = [nullComboBox, .. employees];
-            comboBox.DataSource = list;
-        }
-
-        for (int i = 0; i < comboBoxes.Count; i++)
-        {
-            if (selectedIds[i] != null)
-            {
-                var employee = employees.FirstOrDefault(e => e.Id == selectedIds[i]);
-                if (employee != null)
-                {
-                    comboBoxes[i].SelectedItem = employee;
-                }
-            }
-        }
-    }
-
-    private void Event_SafeChanged(object? sender, long newSafe)
-    {
-        if (InvokeRequired)
-        {
-            Invoke(() => Event_SafeChanged(sender, newSafe));
-            return;
-        }
-
-        UpdateReportPreview(sender, EventArgs.Empty);
-    }
-
-    private async void OnFactSafeChanged(object? sender, EventArgs e)
-    {
-        await RefreshSafeFromServerAsync();
-    }
-
-    private void DataSalaryRaport(object? sender, EventArgs e)
-    {
-        if (isUpdating) return;
-
-        isUpdating = true;
-        try
-        {
-            var changedControl = sender as Control;
-            int employeeIndex = GetEmployeeIndex(changedControl);
-
-            if (employeeIndex >= 0)
-            {
-                UpdateEmployeeData(employeeIndex);
-            }
-            else
-            {
-                RebuildEmployeesList();
-            }
-        }
-        finally
-        {
-            isUpdating = false;
-        }
-    }
-
-    private void UpdateReportPreview(object? sender, EventArgs e)
-    {
-        if (isUpdating) return;
-
-        RebuildEmployeesList();
-        var report = GenerateReport();
-        var preview = FormatReportPreview(report);
-
-        listBoxRaport.Items.Clear();
-        foreach (var line in preview.Split('\n'))
-        {
-            if (!string.IsNullOrWhiteSpace(line))
-            {
-                listBoxRaport.Items.Add(line);
-            }
-        }
-    }
-
-    
-    private void AddSendInfo(string message)
-    {
-        if (InvokeRequired)
-        {
-            Invoke(() => AddSendInfo(message));
-            return;
-        }
-
-        listBoxSendInformation.Items.Add(message);
-    }
-
-    private async Task RefreshSafeFromServerAsync()
-    {
-        if (safeService == null)
-        {
-            return;
-        }
-
-        try
-        {
-            await safeService.RefreshCurrentSafeAsync();
-        }
-        catch
-        {
-            // keep the last known safe value if refresh fails
-        }
-    }
-
-    private string FormatReportPreview(ReportData report)
-    {
-        var sb = new System.Text.StringBuilder();
-
-        sb.AppendLine(report.Date.ToString("dd.MM.yyyy HH:mm"));
-        sb.AppendLine();
-        sb.AppendLine($"Нал: {report.FactCash}");
-        sb.AppendLine($"Б/Н: {report.FactNonCash}");
-        sb.AppendLine($"Выручка: {report.Revenue}");
-        sb.AppendLine($"Итог: {report.Total}");
-        sb.AppendLine();
-        sb.AppendLine($"Минус по кассе: {report.CashDiscrepancy}");
-        sb.AppendLine($"{GetSafeDiscrepancyCaption(report.SafeDiscrepancy)}: {Math.Abs(report.SafeDiscrepancy)}");
-        sb.AppendLine();
-        sb.AppendLine($"Факт сейфа: {report.FactSafe}");
-        sb.AppendLine($"Теперь сейфа: {report.NewSafe}");
-        sb.AppendLine();
-        sb.AppendLine("==програмные данные==");
-        sb.AppendLine($"Нал: {report.ProgramCash}");
-        sb.AppendLine($"Безнал: {report.ProgramNonCash}");
-        sb.AppendLine($"Сейф: {report.ProgramSafe}");
-
-        if (report.TotalSalary > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"Всего ЗП: {report.TotalSalary} руб.");
-        }
-
-        return sb.ToString();
-    }
-
-    private bool ConfirmSafeDiscrepancy(ReportData report, bool isSendAction)
-    {
-        if (report.SafeDiscrepancy == 0)
-        {
-            return true;
-        }
-
-        var discrepancyTitle = GetSafeDiscrepancyCaption(report.SafeDiscrepancy);
-        var discrepancyAmount = Math.Abs(report.SafeDiscrepancy);
-        var message =
-            $"Актуальное значение сейфа обновлено: {report.ProgramSafe} руб.\n" +
-            $"Указано по факту: {report.FactSafe} руб.\n" +
-            $"{discrepancyTitle}: {discrepancyAmount} руб.";
-
-        if (!isSendAction)
-        {
-            MessageBox.Show(
-                message,
-                "Расхождение по сейфу",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning
-            );
-
-            return true;
-        }
-
-        var result = MessageBox.Show(
-            $"{message}\n\nПродолжить отправку отчёта?",
-            "Расхождение по сейфу",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning
-        );
-
-        return result == DialogResult.Yes;
-    }
-
-    private static string GetSafeDiscrepancyCaption(int safeDiscrepancy) =>
-        safeDiscrepancy switch
-        {
-            > 0 => "Плюс по сейфу",
-            < 0 => "Минус по сейфу",
-            _ => "Расхождение по сейфу"
-        };
-
-    private bool ValidateMinusTotals(ReportData report, bool showMessage)
-    {
-        var totalMinusCash = Math.Abs(report.CashDiscrepancy);
-        var totalMinusSafe = report.SafeDiscrepancy < 0 ? -report.SafeDiscrepancy : 0;
-        var totalMinusEntered = employeesData.Sum(e => e.Minus);
-        var totalMinusExpected = totalMinusCash + totalMinusSafe;
-
-        if (totalMinusEntered == totalMinusExpected)
-        {
-            return true;
-        }
-
-        if (showMessage)
-        {
-            MessageBox.Show(
-                $"Сумма минусов должна быть равна {totalMinusExpected} руб.\n" +
-                $"Указано минусов: {totalMinusEntered} руб.",
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-        }
-
-        return false;
-    }
-
-    private async Task<bool> ValidateEmployeeMinusRulesAsync(bool showMessage)
-    {
-        if (employeeService == null)
-        {
-            return false;
-        }
-
-        employeeSalaryCache.Clear();
-
-        foreach (var emp in employeesData)
-        {
-            if (emp.Employee == null || string.IsNullOrWhiteSpace(emp.Employee.Id))
-            {
-                continue;
-            }
-
-            var salaryCheck = await GetCurrentSalaryAsync(emp.Employee.Id);
-            if (!salaryCheck.Success)
-            {
-                if (showMessage)
-                {
-                    MessageBox.Show(
-                        salaryCheck.Message,
-                        "Ошибка",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
-
-                return false;
-            }
-
-            if (salaryCheck.CurrentSalary >= 0)
-            {
-                continue;
-            }
-
-            var effectiveHourlyRate = GetEffectiveHourlyRate(emp.Employee);
-            var maxMinus = emp.Hours * effectiveHourlyRate;
-            if (emp.Minus <= maxMinus)
-            {
-                continue;
-            }
-
-            if (showMessage)
-            {
-                MessageBox.Show(
-                    $"Для сотрудника {emp.Employee.Name} при отрицательной ЗП ({salaryCheck.CurrentSalary} руб.) " +
-                    $"минус не может превышать {maxMinus} руб. (часы {emp.Hours} * ставка {effectiveHourlyRate}).",
-                    "Ошибка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-            }
-
-            return false;
-        }
-
-        return true;
-    }
-
-    private async Task<(bool Success, int CurrentSalary, string Message)> GetCurrentSalaryAsync(string employeeId)
-    {
-        if (employeeSalaryCache.TryGetValue(employeeId, out var cachedSalary))
-        {
-            return (true, cachedSalary, string.Empty);
-        }
-
-        if (employeeService == null)
-        {
-            return (false, 0, "Сервис сотрудников недоступен.");
-        }
-
-        var salaryCheck = await employeeService.GetCurrentSalaryAsync(employeeId);
-        if (salaryCheck.Success)
-        {
-            employeeSalaryCache[employeeId] = salaryCheck.CurrentSalary;
-        }
-
-        return salaryCheck;
-    }
-
-    private int GetEffectiveHourlyRate(GrpcEmployee? employee)
-    {
-        if (employee == null)
-        {
-            return 0;
-        }
-
-        if (employeeService != null)
-        {
-            var latest = employeeService.Employees.FirstOrDefault(e => e.Id == employee.Id);
-            if (latest != null)
-            {
-                return latest.HourlyRate;
-            }
-        }
-
-        return employee.HourlyRate;
-    }
+    // ── Employee data management ────────────────────────────────
 
     private int GetEmployeeIndex(Control? control)
     {
@@ -1017,104 +305,7 @@ public partial class RaportUserControl : UserControl
         }
     }
 
-    private void ForceComboRedraw(object? sender, EventArgs e)
-    {
-        if (sender is Control control)
-        {
-            control.Invalidate();
-            control.Refresh();
-        }
-    }
-
-    private void ClearAllFields()
-    {
-        textBoxFactCash.Clear();
-        textBoxFactNonCash.Clear();
-        textBoxProgramCash.Clear();
-        textBoxProgramNonCash.Clear();
-        textBoxSafe.Clear();
-        textBoxWhyMinus.Clear();
-
-        foreach (var comboBox in comboBoxes)
-        {
-            comboBox.SelectedIndex = 0;
-        }
-
-        ClearAllTextBoxes();
-
-        employeesData.Clear();
-        employeeSalaryCache.Clear();
-        listBoxRaport.Items.Clear();
-        listBoxSendInformation.Items.Clear();
-
-        formCache?.ClearPrefix(CachePrefix);
-    }
-
-    private void SaveFieldToCache(object? sender, EventArgs e)
-    {
-        if (isRestoringCache || formCache == null) return;
-
-        // Save text boxes
-        formCache.Set(CachePrefix + "FactCash", textBoxFactCash.Text);
-        formCache.Set(CachePrefix + "FactNonCash", textBoxFactNonCash.Text);
-        formCache.Set(CachePrefix + "ProgramCash", textBoxProgramCash.Text);
-        formCache.Set(CachePrefix + "ProgramNonCash", textBoxProgramNonCash.Text);
-        formCache.Set(CachePrefix + "Safe", textBoxSafe.Text);
-        formCache.Set(CachePrefix + "WhyMinus", textBoxWhyMinus.Text);
-
-        // Save ComboBox selections by employee name (more stable than index)
-        for (var i = 0; i < comboBoxes.Count; i++)
-        {
-            var emp = comboBoxes[i].SelectedItem as GrpcEmployee;
-            formCache.Set(CachePrefix + $"Employee{i}", emp != null && emp != nullComboBox ? emp.Name : null);
-            formCache.Set(CachePrefix + $"Hours{i}", hoursTextBoxes[i].Text);
-            formCache.Set(CachePrefix + $"Minus{i}", minusTextBoxes[i].Text);
-        }
-    }
-
-    private void RestoreCachedValues()
-    {
-        if (formCache == null) return;
-
-        isRestoringCache = true;
-        try
-        {
-            textBoxFactCash.Text = formCache.Get(CachePrefix + "FactCash") ?? string.Empty;
-            textBoxFactNonCash.Text = formCache.Get(CachePrefix + "FactNonCash") ?? string.Empty;
-            textBoxProgramCash.Text = formCache.Get(CachePrefix + "ProgramCash") ?? string.Empty;
-            textBoxProgramNonCash.Text = formCache.Get(CachePrefix + "ProgramNonCash") ?? string.Empty;
-            textBoxSafe.Text = formCache.Get(CachePrefix + "Safe") ?? string.Empty;
-            textBoxWhyMinus.Text = formCache.Get(CachePrefix + "WhyMinus") ?? string.Empty;
-
-            for (var i = 0; i < comboBoxes.Count; i++)
-            {
-                var cachedName = formCache.Get(CachePrefix + $"Employee{i}");
-                if (!string.IsNullOrWhiteSpace(cachedName))
-                {
-                    for (var j = 0; j < comboBoxes[i].Items.Count; j++)
-                    {
-                        if (comboBoxes[i].Items[j] is GrpcEmployee emp &&
-                            string.Equals(emp.Name, cachedName, StringComparison.Ordinal))
-                        {
-                            comboBoxes[i].SelectedIndex = j;
-                            break;
-                        }
-                    }
-                }
-
-                hoursTextBoxes[i].Text = formCache.Get(CachePrefix + $"Hours{i}") ?? string.Empty;
-                minusTextBoxes[i].Text = formCache.Get(CachePrefix + $"Minus{i}") ?? string.Empty;
-            }
-        }
-        finally
-        {
-            isRestoringCache = false;
-        }
-    }
-
-    #endregion
-
-    #region ComboBox Logic
+    // ── ComboBox UI ─────────────────────────────────────────────
 
     private void OnComboBoxSelectedIndexChanged(object? sender, EventArgs e)
     {
@@ -1145,10 +336,7 @@ public partial class RaportUserControl : UserControl
         textBoxHoursThirdNameRaport.Visible = firstValid && secondValid && thirdValid;
         textBoxMinusThirdNameRaport.Visible = firstValid && secondValid && thirdValid;
 
-        if (!firstValid)
-        {
-            return;
-        }
+        if (!firstValid) return;
 
         if (!secondValid)
         {
@@ -1159,50 +347,24 @@ public partial class RaportUserControl : UserControl
     private bool IsRowActive(int index)
     {
         if (index < 0 || index >= comboBoxes.Count)
-        {
             return false;
-        }
 
         if (comboBoxes[index].SelectedItem is not GrpcEmployee employee || employee == nullComboBox)
-        {
             return false;
-        }
 
         return hoursTextBoxes[index].Visible && minusTextBoxes[index].Visible;
     }
 
-    private void ClearAllTextBoxes()
+    private void ForceComboRedraw(object? sender, EventArgs e)
     {
-        foreach (var textBox in hoursTextBoxes.Concat(minusTextBoxes))
+        if (sender is Control control)
         {
-            textBox.Clear();
-        }
-
-        foreach (var hoursBox in hoursTextBoxes)
-        {
-            previousHoursValues[hoursBox] = "0";
+            control.Invalidate();
+            control.Refresh();
         }
     }
 
-    private void ClearSecondAndThirdTextBoxes()
-    {
-        textBoxHoursSecondNameRaport.Clear();
-        textBoxMinusSecondNameRaport.Clear();
-        previousHoursValues[textBoxHoursSecondNameRaport] = "0";
-
-        ClearThirdTextBoxes();
-    }
-
-    private void ClearThirdTextBoxes()
-    {
-        textBoxHoursThirdNameRaport.Clear();
-        textBoxMinusThirdNameRaport.Clear();
-        previousHoursValues[textBoxHoursThirdNameRaport] = "0";
-    }
-
-    #endregion
-
-    #region Cleanup
+    // ── Dispose ─────────────────────────────────────────────────
 
     protected override void Dispose(bool disposing)
     {
@@ -1213,6 +375,4 @@ public partial class RaportUserControl : UserControl
         }
         base.Dispose(disposing);
     }
-
-    #endregion
 }
