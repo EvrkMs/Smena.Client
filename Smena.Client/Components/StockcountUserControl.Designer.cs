@@ -28,8 +28,10 @@ partial class StockcountUserControl
     private MaterialButton                        buttonClearList;
     private Label                                 labelStatus;
 
-    // Items DataGridView
-    private DataGridView                          dataGridViewItems;
+    // Items list
+    private MaterialListView                      itemsListView;
+    private ContextMenuStrip                      contextMenuItems;
+    private ToolStripMenuItem                     menuItemDelete;
 
     // Result panel (bottom, initially hidden)
     private Panel                                 panelResult;
@@ -232,18 +234,32 @@ partial class StockcountUserControl
             labelStatus, buttonClearList, buttonCalculate, buttonAddFromStock
         ]);
 
-        // ── Items DataGridView ────────────────────────────────────
-        dataGridViewItems = new DataGridView { Dock = DockStyle.Fill };
-        dataGridViewItems.Columns.AddRange(
-            new DataGridViewTextBoxColumn { HeaderText = "Наименование", Name = "ColName",   FillWeight = 100, ReadOnly = true  },
-            new DataGridViewTextBoxColumn { HeaderText = "Артикул",      Name = "ColArt",    FillWeight = 25,  ReadOnly = true  },
-            new DataGridViewTextBoxColumn { HeaderText = "Папка",        Name = "ColFolder", FillWeight = 35,  ReadOnly = true  },
-            new DataGridViewTextBoxColumn { HeaderText = "Остаток МС",   Name = "ColStock",  FillWeight = 20,  ReadOnly = true  },
-            new DataGridViewTextBoxColumn { HeaderText = "Факт",         Name = "ColFact",   FillWeight = 20,  ReadOnly = false },
-            new DataGridViewButtonColumn  { HeaderText = "",             Name = "ColDel",    FillWeight = 7,   Text = "✕",  UseColumnTextForButtonValue = true }
-        );
-        dataGridViewItems.CellEndEdit += dataGridViewItems_CellEndEdit;
-        dataGridViewItems.CellClick   += dataGridViewItems_CellClick;
+        // ── Контекстное меню для списка позиций ──────────────────
+        menuItemDelete = new ToolStripMenuItem("Удалить позицию");
+        menuItemDelete.Click += menuItemDelete_Click;
+        contextMenuItems = new ContextMenuStrip();
+        contextMenuItems.Items.Add(menuItemDelete);
+
+        // ── Список позиций (MaterialListView) ─────────────────────
+        itemsListView = new MaterialListView
+        {
+            Dock                            = DockStyle.Fill,
+            View                            = View.Details,
+            FullRowSelect                   = true,
+            GridLines                       = false,
+            BorderStyle                     = BorderStyle.None,
+            UseCompatibleStateImageBehavior = false,
+            MultiSelect                     = false,
+            TabIndex                        = 2,
+            ContextMenuStrip                = contextMenuItems,
+        };
+        itemsListView.Columns.AddRange([
+            new ColumnHeader { Text = "Наименование", Width = 320 },
+            new ColumnHeader { Text = "МС",           Width = 80  },
+            new ColumnHeader { Text = "Факт",         Width = 80  },
+        ]);
+        itemsListView.DoubleClick += itemsListView_DoubleClick;
+        itemsListView.Resize      += (_, _) => ResizeItemsColumns();
 
         // ── Result panel ──────────────────────────────────────────
         labelResultTitle = new Label
@@ -336,6 +352,6 @@ partial class StockcountUserControl
         panelResult.Controls.AddRange([resultListView, panelResultHeader]);
 
         // ── Assemble ─────────────────────────────────────────────
-        Controls.AddRange([panelResult, dataGridViewItems, panelActions, panelSelected, panelSearch]);
+        Controls.AddRange([panelResult, itemsListView, panelActions, panelSelected, panelSearch]);
     }
 }

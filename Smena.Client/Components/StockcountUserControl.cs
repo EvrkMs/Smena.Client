@@ -28,6 +28,10 @@ public partial class StockcountUserControl : UserControl
     private readonly ToolStripDropDown _dropDown = new() { AutoClose = true };
     private readonly ListBox          _dropList  = new();
 
+    // Floating TextBox for inline fact editing in the list
+    private readonly TextBox _factEditBox   = new();
+    private          int     _editingRowIdx = -1;
+
     // Currently selected item from dropdown (before Add is pressed)
     private GrpcWarehouseItem? _selected;
 
@@ -38,8 +42,9 @@ public partial class StockcountUserControl : UserControl
     public StockcountUserControl()
     {
         InitializeComponent();
+        if (DesignMode) return;
         BuildDropdown();
-        StyleGrids();
+        BuildFactEditBox();
     }
 
     public void Initialize(WarehouseService warehouseService)
@@ -294,17 +299,28 @@ public partial class StockcountUserControl : UserControl
 
     private void RefreshGrid()
     {
-        dataGridViewItems.Rows.Clear();
+        itemsListView.BeginUpdate();
+        itemsListView.Items.Clear();
         foreach (var r in _rows)
         {
-            var ri = dataGridViewItems.Rows.Add(
-                r.Name, r.Article, r.Folder,
-                FormatQty(r.Stock),
-                r.Fact.HasValue ? FormatQty(r.Fact.Value) : string.Empty,
-                "✕");
-            dataGridViewItems.Rows[ri].Tag = r.Key;
+            var item = new ListViewItem(r.Name);
+            item.SubItems.Add(FormatQty(r.Stock));
+            item.SubItems.Add(r.Fact.HasValue ? FormatQty(r.Fact.Value) : string.Empty);
+            item.Tag = r.Key;
+            itemsListView.Items.Add(item);
         }
+        itemsListView.EndUpdate();
+        ResizeItemsColumns();
         UpdateStatus();
+    }
+
+    private void ResizeItemsColumns()
+    {
+        if (itemsListView.Columns.Count < 3) return;
+        var fill = itemsListView.ClientSize.Width
+                   - itemsListView.Columns[1].Width
+                   - itemsListView.Columns[2].Width - 6;
+        if (fill > 80) itemsListView.Columns[0].Width = fill;
     }
 
     private void UpdateStatus()
@@ -314,31 +330,74 @@ public partial class StockcountUserControl : UserControl
         buttonCalculate.Enabled = _rows.Count > 0;
     }
 
-    // ── Fact cell edit ────────────────────────────────────────────
-    private void dataGridViewItems_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
+    // ── Редактирование факта (двойной клик → плавающий TextBox) ──
+    private void BuildFactEditBox()
     {
-        if (e.ColumnIndex != ColIdxFact) return;
+        _factEditBox.Visible     = false;
+        _factEditBox.BorderStyle = BorderStyle.FixedSingle;
+        _factEditBox.Font        = new Font("Segoe UI", 10f);
+        _factEditBox.TextAlign   = HorizontalAlignment.Center;
+        _factEditBox.KeyDown    += FactEditBox_KeyDown;
+        _factEditBox.LostFocus  += FactEditBox_LostFocus;
+        itemsListView.Controls.Add(_factEditBox);
+    }
 
-        var row = dataGridViewItems.Rows[e.RowIndex];
-        var key = row.Tag as string;
+    private void itemsListView_DoubleClick(object? sender, EventArgs e)
+    {
+        if (itemsListView.SelectedItems.Count == 0) return;
+        ShowFactEditBox(itemsListView.SelectedIndices[0]);
+    }
+
+    private void ShowFactEditBox(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= itemsListView.Items.Count) return;
+        var sub    = itemsListView.Items[rowIndex].SubItems[2];
+        var bounds = sub.Bounds;
+        if (bounds.Width < 20) return;
+        _editingRowIdx = rowIndex;
+        _factEditBox.SetBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height + 2);
+        _factEditBox.Text = sub.Text;
+        _factEditBox.Visible = true;
+        _factEditBox.Focus();
+        _factEditBox.SelectAll();
+    }
+
+    private void CommitFactEdit()
+    {
+        _factEditBox.Visible = false;
+        if (_editingRowIdx < 0 || _editingRowIdx >= itemsListView.Items.Count) return;
+
+        var item = itemsListView.Items[_editingRowIdx];
+        var key  = item.Tag as string;
+        _editingRowIdx = -1;
         if (key is null) return;
+
         var modelRow = _rows.Find(r => r.Key == key);
         if (modelRow is null) return;
 
-        var raw = row.Cells[ColIdxFact].Value?.ToString() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(raw))
+        var raw = _factEditBox.Text.Trim();
+        if (string.IsNullOrEmpty(raw))
             modelRow.Fact = null;
         else if (TryParseFact(raw, out var d))
             modelRow.Fact = d;
 
+        item.SubItems[2].Text = modelRow.Fact.HasValue ? FormatQty(modelRow.Fact.Value) : string.Empty;
         UpdateStatus();
     }
 
-    // ── Delete row ────────────────────────────────────────────────
-    private void dataGridViewItems_CellClick(object? sender, DataGridViewCellEventArgs e)
+    private void FactEditBox_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.ColumnIndex != ColIdxDelete || e.RowIndex < 0) return;
-        var key = dataGridViewItems.Rows[e.RowIndex].Tag as string;
+        if (e.KeyCode == Keys.Enter)  { CommitFactEdit(); e.Handled = true; }
+        if (e.KeyCode == Keys.Escape) { _factEditBox.Visible = false; _editingRowIdx = -1; }
+    }
+
+    private void FactEditBox_LostFocus(object? sender, EventArgs e) => CommitFactEdit();
+
+    // ── Удаление через ПКМ ────────────────────────────────────────
+    private void menuItemDelete_Click(object? sender, EventArgs e)
+    {
+        if (itemsListView.SelectedItems.Count == 0) return;
+        var key = itemsListView.SelectedItems[0].Tag as string;
         if (key is null) return;
         _rows.RemoveAll(r => r.Key == key);
         RefreshGrid();
@@ -348,6 +407,7 @@ public partial class StockcountUserControl : UserControl
     // ── Calculate ─────────────────────────────────────────────────
     private void buttonCalculate_Click(object? sender, EventArgs e)
     {
+        CommitFactEdit(); // сохранить незаконченное редактирование
         _negatives = _rows
             .Where(r => r.Fact.HasValue)
             .Select(r =>
@@ -370,7 +430,7 @@ public partial class StockcountUserControl : UserControl
         panelResult.BringToFront();
     }
 
-    // ── Clear list ────────────────────────────────────────────────
+    // ── Очистить список ──────────────────────────────────────────
     private void buttonClearList_Click(object? sender, EventArgs e)
     {
         if (_rows.Count == 0) return;
@@ -380,56 +440,6 @@ public partial class StockcountUserControl : UserControl
         _rows.Clear();
         RefreshGrid();
         panelResult.Visible = false;
-    }
-
-    // ── Style ─────────────────────────────────────────────────────
-    private const int ColIdxFact   = 4;
-    private const int ColIdxDelete = 5;
-
-    private void StyleGrids()
-    {
-        StyleGrid(dataGridViewItems, editable: true);
-
-        // Факт — тёмно-голубой фон (подсказка что редактируемо)
-        dataGridViewItems.Columns[ColIdxFact].DefaultCellStyle.BackColor = Color.FromArgb(20, 40, 70);
-        // Кнопка удаления
-        dataGridViewItems.Columns[ColIdxDelete].DefaultCellStyle.ForeColor = Color.FromArgb(248, 113, 113);
-        dataGridViewItems.Columns[ColIdxDelete].DefaultCellStyle.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-        dataGridViewItems.Columns[ColIdxDelete].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-    }
-
-    private static void StyleGrid(DataGridView dgv, bool editable)
-    {
-        dgv.BackgroundColor              = Color.FromArgb(18, 22, 36);
-        dgv.GridColor                    = Color.FromArgb(45, 55, 72);
-        dgv.BorderStyle                  = BorderStyle.None;
-        dgv.RowHeadersVisible            = false;
-        dgv.AllowUserToAddRows           = false;
-        dgv.AllowUserToDeleteRows        = false;
-        dgv.AllowUserToResizeRows        = false;
-        dgv.ReadOnly                     = !editable;
-        dgv.SelectionMode                = DataGridViewSelectionMode.FullRowSelect;
-        dgv.AutoSizeColumnsMode          = DataGridViewAutoSizeColumnsMode.Fill;
-        dgv.ColumnHeadersHeightSizeMode  = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        dgv.ColumnHeadersHeight          = 34;
-        dgv.EnableHeadersVisualStyles    = false;
-
-        var hs = dgv.ColumnHeadersDefaultCellStyle;
-        hs.BackColor = Color.FromArgb(30, 18, 80);
-        hs.ForeColor = Color.FromArgb(200, 200, 220);
-        hs.Font      = new Font("Segoe UI", 9f, FontStyle.Bold);
-        hs.SelectionBackColor = hs.BackColor;
-
-        var rs = dgv.DefaultCellStyle;
-        rs.BackColor          = Color.FromArgb(18, 22, 36);
-        rs.ForeColor          = Color.FromArgb(220, 220, 235);
-        rs.SelectionBackColor = Color.FromArgb(55, 35, 120);
-        rs.SelectionForeColor = Color.White;
-        rs.Font               = new Font("Segoe UI", 9f);
-
-        var alt = dgv.AlternatingRowsDefaultCellStyle;
-        alt.BackColor          = Color.FromArgb(24, 28, 46);
-        alt.SelectionBackColor = Color.FromArgb(55, 35, 120);
     }
 
     // ── Copy ──────────────────────────────────────────────────────
