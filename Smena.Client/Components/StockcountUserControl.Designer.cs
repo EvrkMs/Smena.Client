@@ -38,7 +38,7 @@ partial class StockcountUserControl
     private Button                                buttonCloseResult;
     private MaterialButton                        buttonCopyText;
     private MaterialButton                        buttonCopyImage;
-    private ResultCanvas                          resultCanvas;
+    private ListView                              resultListView;
 
     protected override void Dispose(bool disposing)
     {
@@ -306,7 +306,26 @@ partial class StockcountUserControl
             buttonCloseResult, buttonCopyImage, buttonCopyText, labelResultTitle
         ]);
 
-        resultCanvas = new ResultCanvas { Dock = DockStyle.Fill };
+        resultListView = new ListView
+        {
+            Dock                            = DockStyle.Fill,
+            View                            = View.Details,
+            FullRowSelect                   = true,
+            GridLines                       = false,
+            BackColor                       = Color.FromArgb(245, 246, 252),
+            ForeColor                       = Color.FromArgb(30, 35, 60),
+            Font                            = new Font("Segoe UI", 9.5f),
+            BorderStyle                     = BorderStyle.None,
+            UseCompatibleStateImageBehavior = false,
+            MultiSelect                     = false,
+            HeaderStyle                     = ColumnHeaderStyle.Nonclickable,
+        };
+        resultListView.Columns.AddRange([
+            new ColumnHeader { Text = "Наименование", Width = 300 },
+            new ColumnHeader { Text = "МС",           Width = 80  },
+            new ColumnHeader { Text = "Факт",         Width = 80  },
+            new ColumnHeader { Text = "Расхождение",  Width = 130 },
+        ]);
 
         panelResult = new Panel
         {
@@ -314,7 +333,7 @@ partial class StockcountUserControl
             Height  = 260,
             Visible = false,
         };
-        panelResult.Controls.AddRange([resultCanvas, panelResultHeader]);
+        panelResult.Controls.AddRange([resultListView, panelResultHeader]);
 
         // ── Assemble ─────────────────────────────────────────────
         Controls.AddRange([panelResult, dataGridViewItems, panelActions, panelSelected, panelSearch]);

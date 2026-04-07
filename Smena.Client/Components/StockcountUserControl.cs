@@ -16,9 +16,13 @@ public partial class StockcountUserControl : UserControl
         public string Key => Name + "||" + Article;
     }
 
+    private sealed record ResultRow(
+        string Name, string Article, string Folder,
+        double Stock, double Fact, double Diff, double Pct);
+
     private WarehouseService? _warehouseService;
-    private readonly List<Row>        _rows      = [];
-    private List<ResultCanvas.ResultRow> _negatives = [];
+    private readonly List<Row>  _rows      = [];
+    private List<ResultRow>     _negatives = [];
 
     // Dropdown via ToolStripDropDown
     private readonly ToolStripDropDown _dropDown = new() { AutoClose = true };
@@ -350,13 +354,13 @@ public partial class StockcountUserControl : UserControl
             {
                 double diff = r.Fact!.Value - r.Stock;
                 double pct  = r.Stock > 0 ? diff / r.Stock * 100 : 0;
-                return new ResultCanvas.ResultRow(r.Name, r.Article, r.Folder, r.Stock, r.Fact.Value, diff, pct);
+                return new ResultRow(r.Name, r.Article, r.Folder, r.Stock, r.Fact.Value, diff, pct);
             })
             .Where(r => r.Diff < 0)
             .OrderBy(r => r.Diff)
             .ToList();
 
-        resultCanvas.SetRows(_negatives);
+        PopulateResultListView();
 
         labelResultTitle.Text = _negatives.Count == 0
             ? "Расхождений нет — отлично! ✓"
@@ -439,9 +443,7 @@ public partial class StockcountUserControl : UserControl
         foreach (var r in _negatives)
         {
             var diffStr = $"{FormatQty(r.Diff)} ({r.Pct:F1}%)";
-            sb.AppendLine($"{r.Name}  →  {diffStr}");
-            if (!string.IsNullOrEmpty(r.Article))
-                sb.AppendLine($"   {r.Article}  МС: {FormatQty(r.Stock)}  Факт: {FormatQty(r.Fact)}");
+            sb.AppendLine($"{r.Name}  →  {diffStr}  (МС: {FormatQty(r.Stock)}  Факт: {FormatQty(r.Fact)})");
         }
         Clipboard.SetText(sb.ToString().TrimEnd());
         FlashButton(buttonCopyText, "✓ Скопировано", "Текст");
@@ -467,32 +469,31 @@ public partial class StockcountUserControl : UserControl
     private Bitmap RenderResultTable()
     {
         const int rowH = 34, hdrH = 42, padX = 14;
-        int[] colPcts = [42, 10, 14, 10, 10, 14];
+        int[] colPcts = [55, 14, 14, 17];
 
         var rows = _negatives
             .Select(r => new string[]
             {
-                r.Name, r.Article, r.Folder,
+                r.Name,
                 FormatQty(r.Stock), FormatQty(r.Fact),
                 $"{FormatQty(r.Diff)} ({r.Pct:F1}%)"
             })
             .ToList();
 
-        string[] headers = ["Наименование", "Артикул", "Папка", "Остаток МС", "Факт", "Расхождение"];
+        string[] headers = ["Наименование", "МС", "Факт", "Расхождение"];
 
-        const int totalW = 1040;
-        int totalH = hdrH + rows.Count * rowH + 16;
+        const int totalW = 900;
+        int totalH = hdrH + rows.Count * rowH + 12;
         int[] colW = colPcts.Select(p => p * (totalW - 2 * padX) / 100).ToArray();
 
         var bmp = new Bitmap(totalW, totalH, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
-        g.SmoothingMode            = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        g.TextRenderingHint        = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-        g.Clear(Color.FromArgb(18, 22, 36));
+        g.SmoothingMode     = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        g.Clear(Color.FromArgb(245, 246, 252));
 
         // ── Header ──
-        g.FillRectangle(new SolidBrush(Color.FromArgb(30, 18, 80)), 0, 0, totalW, hdrH);
-        g.DrawLine(new Pen(Color.FromArgb(70, 55, 140)), 0, hdrH, totalW, hdrH);
+        g.FillRectangle(new SolidBrush(Color.FromArgb(60, 50, 160)), 0, 0, totalW, hdrH);
 
         var sf = new StringFormat
         {
@@ -502,7 +503,7 @@ public partial class StockcountUserControl : UserControl
             FormatFlags   = StringFormatFlags.NoWrap
         };
         var hdrFont  = new Font("Segoe UI", 9f, FontStyle.Bold);
-        var hdrBrush = new SolidBrush(Color.FromArgb(196, 181, 253));
+        var hdrBrush = new SolidBrush(Color.White);
 
         int x = padX;
         for (int c = 0; c < headers.Length; c++)
@@ -514,10 +515,9 @@ public partial class StockcountUserControl : UserControl
         // ── Rows ──
         var bodyFont  = new Font("Segoe UI", 9f);
         var diffFont  = new Font("Segoe UI", 9f, FontStyle.Bold);
-        var textBrush = new SolidBrush(Color.FromArgb(220, 220, 235));
-        var diffBrush = new SolidBrush(Color.FromArgb(248, 113, 113));
-        var altBrush  = new SolidBrush(Color.FromArgb(22, 26, 44));
-        var linePen   = new Pen(Color.FromArgb(35, 45, 65));
+        var textBrush = new SolidBrush(Color.FromArgb(30, 35, 60));
+        var altBrush  = new SolidBrush(Color.FromArgb(232, 234, 248));
+        var linePen   = new Pen(Color.FromArgb(210, 215, 240));
 
         for (int ri = 0; ri < rows.Count; ri++)
         {
@@ -527,10 +527,12 @@ public partial class StockcountUserControl : UserControl
             x = padX;
             for (int c = 0; c < rows[ri].Length; c++)
             {
-                bool isDiff = c == 5;
+                bool isDiff = c == 3;
+                var  brush  = isDiff
+                    ? new SolidBrush(DiffColor(_negatives[ri].Pct))
+                    : textBrush;
                 g.DrawString(rows[ri][c], isDiff ? diffFont : bodyFont,
-                    isDiff ? diffBrush : textBrush,
-                    new RectangleF(x, y, colW[c], rowH), sf);
+                    brush, new RectangleF(x, y, colW[c], rowH), sf);
                 x += colW[c];
             }
             g.DrawLine(linePen, 0, y + rowH - 1, totalW, y + rowH - 1);
@@ -551,126 +553,37 @@ public partial class StockcountUserControl : UserControl
             ? ((long)v).ToString()
             : v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
-    // ── ResultCanvas ─────────────────────────────────────────────
-    internal sealed class ResultCanvas : Panel
+    // ── Result ListView helpers ───────────────────────────────────
+    private void PopulateResultListView()
     {
-        public sealed record ResultRow(
-            string Name, string Article, string Folder,
-            double Stock, double Fact, double Diff, double Pct);
+        resultListView.BeginUpdate();
+        resultListView.Items.Clear();
 
-        private const int RowH = 58;
-        private const int HdrH = 38;
-
-        private static readonly Color BgRow0  = Color.FromArgb(20, 24, 40);
-        private static readonly Color BgRow1  = Color.FromArgb(25, 30, 50);
-        private static readonly Color BgHdr   = Color.FromArgb(30, 18, 80);
-        private static readonly Color ClrName = Color.FromArgb(225, 225, 240);
-        private static readonly Color ClrMeta = Color.FromArgb(120, 135, 165);
-        private static readonly Color ClrBlue = Color.FromArgb(96, 165, 250);
-        private static readonly Color ClrDiv  = Color.FromArgb(38, 44, 66);
-
-        private static Color DiffColor(double pct) => pct switch
+        foreach (var r in _negatives)
         {
-            > -10  => Color.FromArgb(251, 191,  36),
-            > -30  => Color.FromArgb(249, 115,  22),
-            _      => Color.FromArgb(248,  68,  68),
-        };
-
-        private List<ResultRow> _rows = [];
-
-        public ResultCanvas()
-        {
-            DoubleBuffered = true;
-            AutoScroll     = true;
-        }
-
-        public void SetRows(IReadOnlyList<ResultRow> rows)
-        {
-            _rows = [..rows];
-            AutoScrollMinSize = new Size(1, HdrH + _rows.Count * RowH);
-            Invalidate();
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g  = e.Graphics;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            int oy = AutoScrollPosition.Y;
-            int w  = ClientSize.Width;
-
-            // Header
-            int hY = oy;
-            g.FillRectangle(new SolidBrush(BgHdr), 0, hY, w, HdrH);
-            var hdrFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            var hdrBr   = new SolidBrush(Color.FromArgb(196, 181, 253));
-            var sfL = new StringFormat { Alignment = StringAlignment.Near,  LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-            var sfR = new StringFormat { Alignment = StringAlignment.Far ,  LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
-            int rightW = Math.Min(340, w / 3);
-            g.DrawString("Наименование / Артикул", hdrFont, hdrBr, new RectangleF(18, hY, w - rightW - 18, HdrH), sfL);
-            g.DrawString("МС  |  Факт", hdrFont, hdrBr, new RectangleF(w - rightW, hY, rightW / 2, HdrH), sfL);
-            g.DrawString("Расхождение", hdrFont, hdrBr, new RectangleF(w - rightW / 2, hY, rightW / 2 - 10, HdrH), sfR);
-
-            // Rows
-            var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            var metaFont = new Font("Segoe UI", 8f);
-            var diffFont = new Font("Segoe UI", 10f, FontStyle.Bold);
-
-            for (int i = 0; i < _rows.Count; i++)
+            var item = new ListViewItem(r.Name) { UseItemStyleForSubItems = false };
+            item.SubItems.Add(FormatQty(r.Stock));
+            item.SubItems.Add(FormatQty(r.Fact));
+            var diffSub = new ListViewItem.ListViewSubItem(item,
+                $"{FormatQty(r.Diff)} ({r.Pct:F1}%)")
             {
-                var r  = _rows[i];
-                int rY = oy + HdrH + i * RowH;
-                var bg = i % 2 == 0 ? BgRow0 : BgRow1;
-                g.FillRectangle(new SolidBrush(bg), 0, rY, w, RowH);
-
-                // Accent bar
-                var accent = DiffColor(r.Pct);
-                g.FillRectangle(new SolidBrush(accent), 0, rY + 6, 4, RowH - 12);
-
-                // Name
-                g.DrawString(r.Name, nameFont, new SolidBrush(ClrName),
-                    new RectangleF(14, rY + 6, w - rightW - 18, 20), sfL);
-
-                // Meta
-                var meta = string.Join("  ·  ",
-                    new[] { r.Article, r.Folder }.Where(s => !string.IsNullOrEmpty(s)));
-                g.DrawString(meta, metaFont, new SolidBrush(ClrMeta),
-                    new RectangleF(14, rY + 28, w - rightW - 18, 16), sfL);
-
-                // Stock + Fact
-                var stockFact = $"МС: {Fmt(r.Stock)}    Факт: {Fmt(r.Fact)}";
-                g.DrawString(stockFact, metaFont, new SolidBrush(ClrBlue),
-                    new RectangleF(w - rightW, rY + 6, rightW / 2 - 6, RowH), sfL);
-
-                // Diff
-                var diffStr = $"{Fmt(r.Diff)}";
-                var pctStr  = $" ({r.Pct:F1}%)";
-                var diffBr  = new SolidBrush(DiffColor(r.Pct));
-                g.DrawString(diffStr + pctStr, diffFont, diffBr,
-                    new RectangleF(w - rightW / 2, rY + 12, rightW / 2 - 10, 24), sfR);
-
-                // Divider
-                g.DrawLine(new Pen(ClrDiv), 0, rY + RowH - 1, w, rY + RowH - 1);
-            }
-
-            if (_rows.Count == 0)
-            {
-                var emptyFont = new Font("Segoe UI", 10f);
-                g.DrawString("Нет минусовых расхождений ✓",
-                    emptyFont, new SolidBrush(Color.FromArgb(80, 200, 120)),
-                    new RectangleF(0, oy + HdrH + 16, w, 30),
-                    new StringFormat { Alignment = StringAlignment.Center });
-            }
+                ForeColor = DiffColor(r.Pct),
+                Font      = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            };
+            item.SubItems.Add(diffSub);
+            resultListView.Items.Add(item);
         }
 
-        protected override void OnSizeChanged(EventArgs e)
-        {
-            base.OnSizeChanged(e);
-            Invalidate();
-        }
+        if (resultListView.Columns.Count > 0)
+            resultListView.Columns[0].Width = -2;
 
-        private static string Fmt(double v)
-            => v == Math.Floor(v)
-                ? ((long)v).ToString()
-                : v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        resultListView.EndUpdate();
     }
+
+    private static Color DiffColor(double pct) => pct switch
+    {
+        > -10 => Color.FromArgb(160, 100,   0),
+        > -30 => Color.FromArgb(190,  70,   0),
+        _     => Color.FromArgb(200,  25,  25),
+    };
 }
