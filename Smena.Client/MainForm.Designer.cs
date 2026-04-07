@@ -46,11 +46,14 @@ namespace Smena.Client
             expenseUserControl1 = new Smena.Client.Components.ExpenseUserControl();
             tabPlusSafe = new TabPage();
             comingUserControl1 = new Smena.Client.Components.ComingUserControl();
+            tabStockcount = new TabPage();
+            stockcountUserControl1 = new Smena.Client.Components.StockcountUserControl();
             materialTabControl1.SuspendLayout();
             tabRaport.SuspendLayout();
             tabAdvance.SuspendLayout();
             tabExpenses.SuspendLayout();
             tabPlusSafe.SuspendLayout();
+            tabStockcount.SuspendLayout();
             SuspendLayout();
             // 
             // materialTabSelector1
@@ -73,6 +76,7 @@ namespace Smena.Client
             materialTabControl1.Controls.Add(tabAdvance);
             materialTabControl1.Controls.Add(tabExpenses);
             materialTabControl1.Controls.Add(tabPlusSafe);
+            materialTabControl1.Controls.Add(tabStockcount);
             materialTabControl1.Depth = 0;
             materialTabControl1.Dock = DockStyle.Fill;
             materialTabControl1.Location = new Point(3, 64);
@@ -161,6 +165,25 @@ namespace Smena.Client
             comingUserControl1.Size = new Size(1282, 716);
             comingUserControl1.TabIndex = 0;
             // 
+            // tabStockcount
+            // 
+            tabStockcount.BackColor = Color.FromArgb(18, 22, 36);
+            tabStockcount.Controls.Add(stockcountUserControl1);
+            tabStockcount.Location = new Point(4, 24);
+            tabStockcount.Name = "tabStockcount";
+            tabStockcount.Size = new Size(1282, 716);
+            tabStockcount.TabIndex = 4;
+            tabStockcount.Text = "Пересчёт";
+            // 
+            // stockcountUserControl1
+            // 
+            stockcountUserControl1.BackColor = Color.FromArgb(18, 22, 36);
+            stockcountUserControl1.Dock = DockStyle.Fill;
+            stockcountUserControl1.Location = new Point(0, 0);
+            stockcountUserControl1.Name = "stockcountUserControl1";
+            stockcountUserControl1.Size = new Size(1282, 716);
+            stockcountUserControl1.TabIndex = 0;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -177,6 +200,7 @@ namespace Smena.Client
             tabAdvance.ResumeLayout(false);
             tabExpenses.ResumeLayout(false);
             tabPlusSafe.ResumeLayout(false);
+            tabStockcount.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -188,11 +212,13 @@ namespace Smena.Client
         private TabPage tabAdvance;
         private TabPage tabExpenses;
         private TabPage tabPlusSafe;
+        private TabPage tabStockcount;
 
         private MaterialSkinManager materialSkinManager;
         private Components.RaportUserControl raportUserControl;
         private Components.AdvanceUserControl advanceUserControl1;
         private Components.ExpenseUserControl expenseUserControl1;
         private Components.ComingUserControl comingUserControl1;
+        private Components.StockcountUserControl stockcountUserControl1;
     }
 }

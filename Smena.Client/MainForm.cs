@@ -14,6 +14,7 @@ internal partial class MainForm : MaterialForm
     private readonly AdvanceService advanceService;
     private readonly ExpenseService expenseService;
     private readonly PhotoService photoService;
+    private readonly WarehouseService warehouseService;
     private readonly GrpcService grpcService;
     private readonly FormCacheService formCache;
 
@@ -22,12 +23,13 @@ internal partial class MainForm : MaterialForm
         this.grpcService = grpcService;
         this.formCache = formCache;
 
-        employeeService = new(grpcService);
-        safeService = new(grpcService);
-        raportService = new(grpcService);
-        advanceService = new(grpcService);
-        expenseService = new(grpcService);
-        photoService = new(grpcService);
+        employeeService  = new(grpcService);
+        safeService      = new(grpcService);
+        raportService    = new(grpcService);
+        advanceService   = new(grpcService);
+        expenseService   = new(grpcService);
+        photoService     = new(grpcService);
+        warehouseService = new(grpcService);
 
         InitializeComponent();
 
@@ -35,6 +37,7 @@ internal partial class MainForm : MaterialForm
         advanceUserControl1.Initialize(employeeService, advanceService, formCache);
         expenseUserControl1.Initialize(employeeService, expenseService, photoService, formCache);
         comingUserControl1.Initialize(safeService, formCache);
+        stockcountUserControl1.Initialize(warehouseService);
         AddEmployeesTab();
 
         materialSkinManager = MaterialSkinManager.Instance;

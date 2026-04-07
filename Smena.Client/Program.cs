@@ -38,8 +38,9 @@ internal static class Program
 
 		var address = ResolveGrpcAddress(config);
 		var apiKey = ResolveApiKey(config);
+		var pathPrefix = config["Grpc:PathPrefix"];
 
-		var grpcService = new GrpcService(address, apiKey);
+		var grpcService = new GrpcService(address, apiKey, pathPrefix);
 		var formCache = new FormCacheService();
 		Application.Run(new MainForm(grpcService, formCache));
 	}
