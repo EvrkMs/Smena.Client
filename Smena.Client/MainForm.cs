@@ -1,12 +1,14 @@
-﻿using Host.Grpc.Services.Employee;
-using MaterialSkin;
-using MaterialSkin.Controls;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 using Smena.Client.Services;
-using System.ComponentModel;
 
 namespace Smena.Client;
 
-internal partial class MainForm : MaterialForm
+/// <summary>
+/// Тонкая C#-оболочка: WebView2 + нативный splash-оверлей на время его инициализации.
+/// Вся бизнес/gRPC-логика — в Services/*, не изменена, вызывается через NativeApiBridge.
+/// </summary>
+internal sealed class MainForm : Form
 {
     private readonly EmployeeService employeeService;
     private readonly SafeService safeService;
@@ -18,219 +20,163 @@ internal partial class MainForm : MaterialForm
     private readonly GrpcService grpcService;
     private readonly FormCacheService formCache;
 
+    private WebView2? webView;
+    private NativeApiBridge? bridge;
+    private Panel? splash;
+
     public MainForm(GrpcService grpcService, FormCacheService formCache)
     {
         this.grpcService = grpcService;
         this.formCache = formCache;
 
-        employeeService  = new(grpcService);
-        safeService      = new(grpcService);
-        raportService    = new(grpcService);
-        advanceService   = new(grpcService);
-        expenseService   = new(grpcService);
-        photoService     = new(grpcService);
+        employeeService = new(grpcService);
+        safeService = new(grpcService);
+        raportService = new(grpcService);
+        advanceService = new(grpcService);
+        expenseService = new(grpcService);
+        photoService = new(grpcService);
         warehouseService = new(grpcService);
 
-        InitializeComponent();
+        Text = "Smena.Client";
+        Width = 1280;
+        Height = 800;
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = ColorTranslator.FromHtml("#12161C");
 
-        raportUserControl.Initialize(employeeService, safeService, raportService, photoService, formCache);
-        advanceUserControl1.Initialize(employeeService, advanceService, formCache);
-        expenseUserControl1.Initialize(employeeService, expenseService, photoService, formCache);
-        comingUserControl1.Initialize(safeService, formCache);
-        stockcountUserControl1.Initialize(warehouseService);
-        AddEmployeesTab();
-
-        materialSkinManager = MaterialSkinManager.Instance;
-        materialSkinManager.EnforceBackcolorOnAllComponents = true;
-        materialSkinManager.AddFormToManage(this);
-        materialSkinManager.Theme = MaterialSkinManager.Themes.DARK;
-        materialSkinManager.ColorScheme = new ColorScheme(
-            Primary.DeepPurple700,
-            Primary.DeepPurple900,
-            Primary.DeepPurple400,
-            Accent.Cyan700,
-            TextShade.WHITE
-        );
-
-        Shown += OnShownAsync;
+        BuildSplash();
+        Shown += async (_, _) => await InitializeWebViewAsync();
     }
 
-    private async void OnShownAsync(object? sender, EventArgs e)
+    /// <summary>
+    /// Нативный WinForms-оверлей — WebView2 не рисует ничего, пока не отработает
+    /// EnsureCoreWebView2Async + первая навигация, так что без этого экрана пользователь
+    /// первые ~1-2 секунды видит пустое чёрное окно.
+    /// </summary>
+    private void BuildSplash()
     {
-        // Load data asynchronously after the form is shown to avoid blocking the UI thread.
+        splash = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = ColorTranslator.FromHtml("#12161C")
+        };
+
+        var label = new Label
+        {
+            Text = "Smena.Client",
+            ForeColor = ColorTranslator.FromHtml("#C08B3E"),
+            Font = new Font("Segoe UI", 22f, FontStyle.Regular),
+            AutoSize = true
+        };
+        var sub = new Label
+        {
+            Text = "Загрузка…",
+            ForeColor = ColorTranslator.FromHtml("#8892A0"),
+            Font = new Font("Segoe UI", 10f),
+            AutoSize = true
+        };
+
+        splash.Resize += (_, _) =>
+        {
+            label.Location = new Point((splash.Width - label.PreferredWidth) / 2, splash.Height / 2 - 30);
+            sub.Location = new Point((splash.Width - sub.PreferredWidth) / 2, splash.Height / 2 + 10);
+        };
+
+        splash.Controls.Add(label);
+        splash.Controls.Add(sub);
+        Controls.Add(splash);
+        splash.BringToFront();
+    }
+
+    private async Task InitializeWebViewAsync()
+    {
+        webView = new WebView2 { Dock = DockStyle.Fill, Visible = false };
+        Controls.Add(webView);
+
         try
         {
-            await employeeService.LoadOrReloadListAsync();
+            var fixedRuntimePath = Path.Combine(AppContext.BaseDirectory, "webview2runtime");
+            var browserExecutableFolder = Directory.Exists(fixedRuntimePath) ? fixedRuntimePath : null;
+
+            var userDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Smena.Client", "WebView2");
+
+            var env = await CoreWebView2Environment.CreateAsync(
+                browserExecutableFolder: browserExecutableFolder,
+                userDataFolder: userDataFolder);
+
+            await webView.EnsureCoreWebView2Async(env);
         }
-        catch { /* list stays empty; user can retry */ }
-
-        raportUserControl.EnableCache();
-        advanceUserControl1.EnableCache();
-        expenseUserControl1.EnableCache();
-        comingUserControl1.EnableCache();
-
-        try
+        catch (Exception ex)
         {
-            await safeService.RefreshCurrentSafeAsync();
+            splash!.Controls.Clear();
+            splash.Controls.Add(new Label
+            {
+                Text = $"Не удалось запустить встроенный браузер (WebView2):\n{ex.Message}\n\n" +
+                       "Проверьте WebView2 Runtime или папку webview2runtime рядом с exe.",
+                ForeColor = Color.IndianRed,
+                Font = new Font("Segoe UI", 10f),
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter
+            });
+            return;
         }
-        catch { /* safe stays 0; explicit refresh will update later */ }
+
+        var core = webView.CoreWebView2;
+        // ВРЕМЕННО true для диагностики: без DevTools JS-исключения в WebView2 никак
+        // не видны пользователю (проверено на практике — именно это и произошло с
+        // багом в GetConstants/StartPhotoRequest). Верните false перед финальным релизом,
+        // когда убедитесь, что ErrorBoundary в React ловит всё видимым образом.
+        core.Settings.AreDevToolsEnabled = true;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+
+        var webUiFolder = Path.Combine(AppContext.BaseDirectory, "webui");
+        core.SetVirtualHostNameToFolderMapping(
+            "app.local", webUiFolder, CoreWebView2HostResourceAccessKind.Allow);
+
+        bridge = new NativeApiBridge(
+            employeeService, safeService, advanceService, expenseService,
+            raportService, photoService, warehouseService)
+        {
+            Core = core
+        };
+        bridge.OnPostMessage += json =>
+        {
+            if (InvokeRequired) Invoke(() => core.PostWebMessageAsJson(json));
+            else core.PostWebMessageAsJson(json);
+        };
+        core.AddHostObjectToScript("api", bridge);
+
+        WireSafePushEvents(core);
+
+        core.NavigationCompleted += (_, _) =>
+        {
+            webView.Visible = true;
+            splash?.Hide();
+        };
 
         safeService.StartSubscription();
+
+        core.Navigate("https://app.local/index.html");
+    }
+
+    private void WireSafePushEvents(CoreWebView2 core)
+    {
+        safeService.SafeChanged += (_, current) =>
+        {
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { type = "safeChanged", current });
+            if (InvokeRequired) Invoke(() => core.PostWebMessageAsJson(payload));
+            else core.PostWebMessageAsJson(payload);
+        };
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        raportUserControl.UnsubscribeFromEvents();
-        advanceUserControl1.UnsubscribeFromEvents();
-        expenseUserControl1.UnsubscribeFromEvents();
-        comingUserControl1.UnsubscribeFromEvents();
         formCache.Dispose();
         safeService.Dispose();
         grpcService.Dispose();
-
+        webView?.Dispose();
         base.OnFormClosed(e);
-    }
-
-    private void AddEmployeesTab()
-    {
-        var tab = new TabPage("Сотрудники")
-        {
-            BackColor = Color.FromArgb(30, 18, 80)
-        };
-
-        var listBox = new ListBox
-        {
-            BackColor = Color.FromArgb(35, 25, 75),
-            ForeColor = Color.White,
-            BorderStyle = BorderStyle.FixedSingle,
-            Font = new Font("Segoe UI", 12F),
-            Location = new Point(24, 24),
-            Size = new Size(420, 520),
-        };
-
-        var nameBox = new MaterialTextBox
-        {
-            Hint = "Имя",
-            Location = new Point(480, 24),
-            Size = new Size(320, 50),
-        };
-
-        var hourlyRateBox = new MaterialTextBox
-        {
-            Hint = "Ставка (руб/час)",
-            Location = new Point(480, 90),
-            Size = new Size(320, 50),
-        };
-
-        var telegramIdBox = new MaterialTextBox
-        {
-            Hint = "Telegram ID",
-            Location = new Point(480, 156),
-            Size = new Size(320, 50),
-        };
-
-        var salaryThreadBox = new MaterialTextBox
-        {
-            Hint = "Salary thread ID",
-            Location = new Point(480, 222),
-            Size = new Size(320, 50),
-        };
-
-        var addButton = new MaterialButton
-        {
-            Text = "Добавить",
-            Location = new Point(480, 296),
-            Size = new Size(140, 36),
-        };
-
-        void RefreshList()
-        {
-            listBox.DataSource = null;
-            listBox.DisplayMember = nameof(GrpcEmployee.Name);
-            listBox.DataSource = employeeService.Employees.ToList();
-        }
-
-        employeeService.Employees.ListChanged += (_, __) =>
-        {
-            if (InvokeRequired)
-            {
-                Invoke(RefreshList);
-            }
-            else
-            {
-                RefreshList();
-            }
-        };
-
-        RefreshList();
-
-        addButton.Click += async (_, __) =>
-        {
-            if (string.IsNullOrWhiteSpace(nameBox.Text))
-            {
-                MessageBox.Show("Введите имя сотрудника.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            if (!int.TryParse(hourlyRateBox.Text, out var hourlyRate) || hourlyRate < 0)
-            {
-                MessageBox.Show("Введите корректную ставку.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            long telegramId = 0;
-            if (!string.IsNullOrWhiteSpace(telegramIdBox.Text) &&
-                !long.TryParse(telegramIdBox.Text, out telegramId))
-            {
-                MessageBox.Show("Некорректный Telegram ID.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            int salaryThreadId = 0;
-            if (!string.IsNullOrWhiteSpace(salaryThreadBox.Text) &&
-                !int.TryParse(salaryThreadBox.Text, out salaryThreadId))
-            {
-                MessageBox.Show("Некорректный Salary thread ID.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            var employee = new GrpcEmployee
-            {
-                Name = nameBox.Text.Trim(),
-                HourlyRate = hourlyRate,
-                TelegramId = telegramId,
-                SalaryThreadId = salaryThreadId
-            };
-
-            addButton.Enabled = false;
-            try
-            {
-                var (success, message) = await employeeService.AddEmployeeAsync(employee);
-                if (success)
-                {
-                    nameBox.Clear();
-                    hourlyRateBox.Clear();
-                    telegramIdBox.Clear();
-                    salaryThreadBox.Clear();
-                }
-                else
-                {
-                    MessageBox.Show(message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            finally
-            {
-                addButton.Enabled = true;
-            }
-        };
-
-        tab.Controls.Add(listBox);
-        tab.Controls.Add(nameBox);
-        tab.Controls.Add(hourlyRateBox);
-        tab.Controls.Add(telegramIdBox);
-        tab.Controls.Add(salaryThreadBox);
-        tab.Controls.Add(addButton);
-
-        materialTabControl1.TabPages.Add(tab);
     }
 }

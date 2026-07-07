@@ -1,0 +1,46 @@
+/*
+  Тема: кассовая смена / сейф / ЛСД-табло денежного ящика.
+  Сознательно НЕ используем: тёплый кремовый + терракота (клише №1),
+  почти-чёрный + неоновый акцент (клише №2). Вместо этого — чернильно-синяя
+  "бухгалтерская" база с латунным акцентом (цвет металла кассового ящика)
+  и отдельный янтарный тон только для цифровых индикаторов (тикер сейфа).
+*/
+:root {
+  /* Поверхности */
+  --bg: #161d27;
+  --surface: #1f2937;
+  --surface-raised: #26313f;
+  --surface-sunken: #10161e;
+  --border: #33415233;
+  --border-strong: #4a5a6e;
+
+  /* Текст */
+  --text: #e7ebf0;
+  --text-muted: #8b97a7;
+  --text-faint: #5b6675;
+
+  /* Акценты */
+  --brass: #c08b3d;
+  --brass-soft: #c08b3d22;
+  --amber: #f2a93b;
+  --amber-glow: #f2a93b55;
+  --moss: #7ea788;
+  --brick: #c0604a;
+
+  /* Типографика */
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+
+  /* Форма */
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
