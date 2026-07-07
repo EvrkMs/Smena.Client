@@ -32,18 +32,4 @@
 		</None>
 	</ItemGroup>
 
-	<Target Name="BuildReactApp" BeforeTargets="Build" Condition="'$(SkipReactBuild)' != 'true'">
-		<Exec Command="npm install"
-		      WorkingDirectory="$(MSBuildProjectDirectory)/../reactapp"
-		      Condition="!Exists('$(MSBuildProjectDirectory)/../reactapp/node_modules')" />
-		<Exec Command="npm run build"
-		      WorkingDirectory="$(MSBuildProjectDirectory)/../reactapp" />
-		<ItemGroup>
-			<ReactDist Include="$(MSBuildProjectDirectory)/../reactapp/dist/**/*.*" />
-		</ItemGroup>
-		<Copy SourceFiles="@(ReactDist)"
-		      DestinationFolder="$(OutDir)webui/%(RecursiveDir)"
-		      SkipUnchangedFiles="true" />
-	</Target>
-
 </Project>
