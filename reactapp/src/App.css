@@ -4,7 +4,27 @@
   height: 100vh;
   background: var(--bg);
 }
+.raport-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.value-positive {
+  color: green; /* Или ваш цвет для положительных значений */
+}
+.left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* отступ между панелями */
+}
 
+/* Если сетка .raport-grid использует grid-template-areas, 
+   убедитесь, что левая колонка занимает нужное место */
+.raport-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr; /* или ваш вариант */
+  gap: 20px;
+}
 .app-header {
   display: flex;
   align-items: center;
