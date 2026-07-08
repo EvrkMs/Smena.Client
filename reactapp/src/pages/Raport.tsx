@@ -11,6 +11,7 @@ import { Button, NumberField, Panel, Select, TextField } from '../components/ui/
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
 import { formatMoney, parseIntSafe } from '../lib/format';
+import { usePersistedState } from '../lib/hooks';
 
 interface Row {
   employeeId: string;
@@ -34,14 +35,18 @@ export default function Raport() {
 
   const [constants, setConstants] = useState<ShiftConstants>(defaultConstants);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [rows, setRows] = useState<Row[]>([{ ...emptyRow }]);
-  const [factCash, setFactCash] = useState('');
-  const [factNonCash, setFactNonCash] = useState('');
-  const [programCash, setProgramCash] = useState('');
-  const [programNonCash, setProgramNonCash] = useState('');
-  const [factSafe, setFactSafe] = useState('');
+  
+  // Кешируемые состояния
+  const [rows, setRows] = usePersistedState<Row[]>('raport_rows', [{ ...emptyRow }]);
+  const [factCash, setFactCash] = usePersistedState('raport_factCash', '');
+  const [factNonCash, setFactNonCash] = usePersistedState('raport_factNonCash', '');
+  const [programCash, setProgramCash] = usePersistedState('raport_programCash', '');
+  const [programNonCash, setProgramNonCash] = usePersistedState('raport_programNonCash', '');
+  const [factSafe, setFactSafe] = usePersistedState('raport_factSafe', '');
+  const [whyMinus, setWhyMinus] = usePersistedState('raport_whyMinus', '');
+
+  // Состояния, которые не нужно кешировать (данные из API)
   const [programSafe, setProgramSafe] = useState<number | null>(null);
-  const [whyMinus, setWhyMinus] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
 
@@ -118,6 +123,16 @@ export default function Raport() {
         employees: activeRows.map((r) => ({ employeeId: r.employeeId, hours: parseIntSafe(r.hours), minus: parseIntSafe(r.minus) })),
       }, setProgress);
       toast('success', 'Отчёт отправлен.');
+      
+      // Очистка кэша после отправки
+      localStorage.removeItem('raport_rows');
+      localStorage.removeItem('raport_factCash');
+      localStorage.removeItem('raport_factNonCash');
+      localStorage.removeItem('raport_programCash');
+      localStorage.removeItem('raport_programNonCash');
+      localStorage.removeItem('raport_factSafe');
+      localStorage.removeItem('raport_whyMinus');
+
       setRows([{ ...emptyRow }]);
       setFactCash(''); setFactNonCash(''); setProgramCash(''); setProgramNonCash(''); setFactSafe(''); setWhyMinus('');
     } catch (e) { toast('error', String(e)); } finally { setBusy(false); setProgress(''); }
