@@ -18,16 +18,14 @@ internal sealed class MainForm : Form
     private readonly PhotoService photoService;
     private readonly WarehouseService warehouseService;
     private readonly GrpcService grpcService;
-    private readonly FormCacheService formCache;
 
     private WebView2? webView;
     private NativeApiBridge? bridge;
     private Panel? splash;
 
-    public MainForm(GrpcService grpcService, FormCacheService formCache)
+    public MainForm(GrpcService grpcService)
     {
         this.grpcService = grpcService;
-        this.formCache = formCache;
 
         employeeService = new(grpcService);
         safeService = new(grpcService);
@@ -173,7 +171,6 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        formCache.Dispose();
         safeService.Dispose();
         grpcService.Dispose();
         webView?.Dispose();

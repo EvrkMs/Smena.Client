@@ -41,8 +41,7 @@ internal static class Program
 		var pathPrefix = config["Grpc:PathPrefix"];
 
 		var grpcService = new GrpcService(address, apiKey, pathPrefix);
-		var formCache = new FormCacheService();
-		Application.Run(new MainForm(grpcService, formCache));
+		Application.Run(new MainForm(grpcService));
 	}
 
 	private static string ResolveGrpcAddress(IConfiguration config)
