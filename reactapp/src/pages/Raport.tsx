@@ -111,6 +111,17 @@ export default function Raport() {
   const cashDiscrepancy = factCashN + factNonCashN - (programCashN + programNonCashN);
   const safeDiscrepancy = programSafe === null ? 0 : factSafeN - programSafe;
 
+  // Зеркало серверной формулы (RaportOperationsService.CalculateDeltas):
+  // недостача по кассе и недостача по сейфу считаются НЕЗАВИСИМО друг от друга —
+  // излишек в одном не гасит недостачу в другом. Пример: касса -100, сейф +100 →
+  // сотрудник всё равно должен получить минус 100 (не 0), потому что сервер
+  // суммирует max(0,-cashDelta) + max(0,-safeDelta), а не netting (cashDelta+safeDelta).
+  const totalMinusExpected = (cashDiscrepancy < 0 ? -cashDiscrepancy : 0) + (safeDiscrepancy < 0 ? -safeDiscrepancy : 0);
+  const totalMinusEntered = activeRows.reduce((sum, r) => sum + parseIntSafe(r.minus), 0);
+  // Проверяем только когда есть хотя бы один сотрудник — до этого сумма минусов
+  // бессмысленна, а ошибку "Добавьте сотрудника" и так покажет handleSend.
+  const minusMismatch = activeRows.length > 0 && totalMinusEntered !== totalMinusExpected;
+
   const formatDiscrepancy = (val: number) => {
     const formatted = formatMoney(val);
     return val > 0 ? `+${formatted}` : formatted;
@@ -118,7 +129,24 @@ export default function Raport() {
 
   const handleSend = async () => {
     if (activeRows.length === 0) return toast('error', 'Добавьте сотрудника.');
+    // Раньше это узнавали только после ответа сервера — уже дождавшись фото от
+    // сотрудника через Telegram. Теперь считаем ту же сумму заранее и просто не
+    // даём отправить, пока минус не сойдётся — кнопка ниже задизейблена тем же
+    // условием (minusMismatch), это дублирующая проверка на случай гонки.
+    if (minusMismatch) return toast('error', `Сумма минусов должна быть равна ${totalMinusExpected}, введено ${totalMinusEntered}.`);
     if (cashDiscrepancy < 0 && !whyMinus.trim()) return toast('error', 'Укажите причину недостачи.');
+
+    // Доп. модалка именно на расхождение по сейфу — отдельно от общего
+    // подтверждения ниже. Даже если минус уже сходится (проверка выше это
+    // гарантирует), кассир должен явно увидеть цифру расхождения и подтвердить
+    // её осознанно, а не просто нажать общее "Отправить отчёт?".
+    if (safeDiscrepancy !== 0) {
+      const okSafe = await confirm({
+        title: 'Расхождение по сейфу',
+        message: `Обнаружено расхождение по сейфу: ${formatDiscrepancy(safeDiscrepancy)} ₽. Продолжить закрытие смены?`,
+      });
+      if (!okSafe) return;
+    }
     
     const ok = await confirm({ title: 'Отправка отчёта', message: 'Отправить отчет?' });
     if (!ok) return;
@@ -219,8 +247,13 @@ export default function Raport() {
             </dd>
           </div>
         </dl>
+        {activeRows.length > 0 && (
+          <p className={`muted tabular ${minusMismatch ? 'value-negative' : ''}`} style={{ marginTop: 4 }}>
+            Введено минуса: {totalMinusEntered} / требуется {totalMinusExpected}
+          </p>
+        )}
         {progress && <p className="muted photo-status">{progress}</p>}
-        <Button disabled={busy} onClick={handleSend}>{busy ? 'Отправляю…' : 'Отправить отчёт'}</Button>
+        <Button disabled={busy || minusMismatch} onClick={handleSend}>{busy ? 'Отправляю…' : 'Отправить отчёт'}</Button>
       </Panel>
     </div>
   );
