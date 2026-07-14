@@ -4,6 +4,7 @@ import {
   getCurrentSafe,
   getEmployees,
   sendRaportWithPhoto,
+  subscribeToSafeChanges,
   type Employee,
   type ShiftConstants,
 } from '../bridge/api';
@@ -54,6 +55,14 @@ export default function Raport() {
     getConstants().then(setConstants).catch((e) => toast('error', String(e)));
     getEmployees().then(setEmployees).catch((e) => toast('error', String(e)));
     getCurrentSafe().then(setProgramSafe).catch(() => {});
+    // Вкладка не размонтируется после первого открытия (App.tsx держит все табы
+    // смонтированными через display:none), поэтому одного getCurrentSafe() на mount
+    // недостаточно — без подписки programSafe замирает на значении из момента первого
+    // открытия вкладки и дальше расходится с реальным сейфом. Именно это приводило
+    // к тому, что "Расхождение по сейфу" в предпросмотре не совпадало с тем, что
+    // реально проверяет сервер при отправке отчёта (сервер берёт currentSafe свежим
+    // из БД), из-за чего сумма "минусов" не сходилась и отчёт отклонялся.
+    return subscribeToSafeChanges(setProgramSafe);
   }, []);
 
   const activeRows = rows.filter((r) => r.employeeId);
@@ -102,6 +111,17 @@ export default function Raport() {
   const cashDiscrepancy = factCashN + factNonCashN - (programCashN + programNonCashN);
   const safeDiscrepancy = programSafe === null ? 0 : factSafeN - programSafe;
 
+  // Зеркало серверной формулы (RaportOperationsService.CalculateDeltas):
+  // недостача по кассе и недостача по сейфу считаются НЕЗАВИСИМО друг от друга —
+  // излишек в одном не гасит недостачу в другом. Пример: касса -100, сейф +100 →
+  // сотрудник всё равно должен получить минус 100 (не 0), потому что сервер
+  // суммирует max(0,-cashDelta) + max(0,-safeDelta), а не netting (cashDelta+safeDelta).
+  const totalMinusExpected = (cashDiscrepancy < 0 ? -cashDiscrepancy : 0) + (safeDiscrepancy < 0 ? -safeDiscrepancy : 0);
+  const totalMinusEntered = activeRows.reduce((sum, r) => sum + parseIntSafe(r.minus), 0);
+  // Проверяем только когда есть хотя бы один сотрудник — до этого сумма минусов
+  // бессмысленна, а ошибку "Добавьте сотрудника" и так покажет handleSend.
+  const minusMismatch = activeRows.length > 0 && totalMinusEntered !== totalMinusExpected;
+
   const formatDiscrepancy = (val: number) => {
     const formatted = formatMoney(val);
     return val > 0 ? `+${formatted}` : formatted;
@@ -109,7 +129,24 @@ export default function Raport() {
 
   const handleSend = async () => {
     if (activeRows.length === 0) return toast('error', 'Добавьте сотрудника.');
+    // Раньше это узнавали только после ответа сервера — уже дождавшись фото от
+    // сотрудника через Telegram. Теперь считаем ту же сумму заранее и просто не
+    // даём отправить, пока минус не сойдётся — кнопка ниже задизейблена тем же
+    // условием (minusMismatch), это дублирующая проверка на случай гонки.
+    if (minusMismatch) return toast('error', `Сумма минусов должна быть равна ${totalMinusExpected}, введено ${totalMinusEntered}.`);
     if (cashDiscrepancy < 0 && !whyMinus.trim()) return toast('error', 'Укажите причину недостачи.');
+
+    // Доп. модалка именно на расхождение по сейфу — отдельно от общего
+    // подтверждения ниже. Даже если минус уже сходится (проверка выше это
+    // гарантирует), кассир должен явно увидеть цифру расхождения и подтвердить
+    // её осознанно, а не просто нажать общее "Отправить отчёт?".
+    if (safeDiscrepancy !== 0) {
+      const okSafe = await confirm({
+        title: 'Расхождение по сейфу',
+        message: `Обнаружено расхождение по сейфу: ${formatDiscrepancy(safeDiscrepancy)} ₽. Продолжить закрытие смены?`,
+      });
+      if (!okSafe) return;
+    }
     
     const ok = await confirm({ title: 'Отправка отчёта', message: 'Отправить отчет?' });
     if (!ok) return;
@@ -117,13 +154,25 @@ export default function Raport() {
     setBusy(true);
     setProgress('Запрашиваю фото…');
     try {
-      await sendRaportWithPhoto({
+      const result = await sendRaportWithPhoto({
         factCash: factCashN, factNonCash: factNonCashN, programCash: programCashN,
         programNonCash: programNonCashN, factSafe: factSafeN, whyMinus,
         employees: activeRows.map((r) => ({ employeeId: r.employeeId, hours: parseIntSafe(r.hours), minus: parseIntSafe(r.minus) })),
       }, setProgress);
+
+      // Раньше здесь не проверялся result.success — sendRaportWithPhoto не бросает
+      // исключение, если сервер отклонил отчёт по бизнес-правилам (например,
+      // "Сумма минусов должна быть равна N"), он просто возвращает {success:false,
+      // message}. Из-за этого форма показывала "Отчёт отправлен" и чистилась даже
+      // когда отчёт реально не был сохранён на сервере — без единой ошибки и без
+      // строки в серверных логах (это не исключение, а штатный отказ валидации).
+      if (!result.success) {
+        toast('error', result.message || 'Сервер отклонил отчёт.');
+        return;
+      }
+
       toast('success', 'Отчёт отправлен.');
-      
+
       // Очистка кэша после отправки
       localStorage.removeItem('raport_rows');
       localStorage.removeItem('raport_factCash');
@@ -198,8 +247,13 @@ export default function Raport() {
             </dd>
           </div>
         </dl>
+        {activeRows.length > 0 && (
+          <p className={`muted tabular ${minusMismatch ? 'value-negative' : ''}`} style={{ marginTop: 4 }}>
+            Введено минуса: {totalMinusEntered} / требуется {totalMinusExpected}
+          </p>
+        )}
         {progress && <p className="muted photo-status">{progress}</p>}
-        <Button disabled={busy} onClick={handleSend}>{busy ? 'Отправляю…' : 'Отправить отчёт'}</Button>
+        <Button disabled={busy || minusMismatch} onClick={handleSend}>{busy ? 'Отправляю…' : 'Отправить отчёт'}</Button>
       </Panel>
     </div>
   );
