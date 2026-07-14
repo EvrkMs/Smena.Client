@@ -4,6 +4,7 @@ import {
   getCurrentSafe,
   getEmployees,
   sendRaportWithPhoto,
+  subscribeToSafeChanges,
   type Employee,
   type ShiftConstants,
 } from '../bridge/api';
@@ -54,6 +55,14 @@ export default function Raport() {
     getConstants().then(setConstants).catch((e) => toast('error', String(e)));
     getEmployees().then(setEmployees).catch((e) => toast('error', String(e)));
     getCurrentSafe().then(setProgramSafe).catch(() => {});
+    // Вкладка не размонтируется после первого открытия (App.tsx держит все табы
+    // смонтированными через display:none), поэтому одного getCurrentSafe() на mount
+    // недостаточно — без подписки programSafe замирает на значении из момента первого
+    // открытия вкладки и дальше расходится с реальным сейфом. Именно это приводило
+    // к тому, что "Расхождение по сейфу" в предпросмотре не совпадало с тем, что
+    // реально проверяет сервер при отправке отчёта (сервер берёт currentSafe свежим
+    // из БД), из-за чего сумма "минусов" не сходилась и отчёт отклонялся.
+    return subscribeToSafeChanges(setProgramSafe);
   }, []);
 
   const activeRows = rows.filter((r) => r.employeeId);
@@ -117,13 +126,25 @@ export default function Raport() {
     setBusy(true);
     setProgress('Запрашиваю фото…');
     try {
-      await sendRaportWithPhoto({
+      const result = await sendRaportWithPhoto({
         factCash: factCashN, factNonCash: factNonCashN, programCash: programCashN,
         programNonCash: programNonCashN, factSafe: factSafeN, whyMinus,
         employees: activeRows.map((r) => ({ employeeId: r.employeeId, hours: parseIntSafe(r.hours), minus: parseIntSafe(r.minus) })),
       }, setProgress);
+
+      // Раньше здесь не проверялся result.success — sendRaportWithPhoto не бросает
+      // исключение, если сервер отклонил отчёт по бизнес-правилам (например,
+      // "Сумма минусов должна быть равна N"), он просто возвращает {success:false,
+      // message}. Из-за этого форма показывала "Отчёт отправлен" и чистилась даже
+      // когда отчёт реально не был сохранён на сервере — без единой ошибки и без
+      // строки в серверных логах (это не исключение, а штатный отказ валидации).
+      if (!result.success) {
+        toast('error', result.message || 'Сервер отклонил отчёт.');
+        return;
+      }
+
       toast('success', 'Отчёт отправлен.');
-      
+
       // Очистка кэша после отправки
       localStorage.removeItem('raport_rows');
       localStorage.removeItem('raport_factCash');
