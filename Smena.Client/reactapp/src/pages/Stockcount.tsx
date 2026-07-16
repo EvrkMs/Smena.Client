@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { getAllWarehouseItems, searchWarehouseItems, type WarehouseItem } from '../bridge/api';
+import type { WarehouseItem } from '../bridge/api';
+import { useApiEngine } from '../bridge/engine';
 import { Button, Panel, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
@@ -17,6 +18,7 @@ function formatQty(v: number): string {
 }
 
 export default function Stockcount() {
+  const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
   const [query, setQuery] = useState('');
@@ -28,7 +30,8 @@ export default function Stockcount() {
   const search = async (q: string) => {
     setQuery(q);
     if (q.trim().length < 2) { setHits([]); return; }
-    try { setHits(await searchWarehouseItems(q.trim(), 15)); } catch (e) { toast('error', String(e)); }
+    const found = await api.searchWarehouseItems(q.trim(), 15);
+    if (found) setHits(found);
   };
 
   const addItem = (item: WarehouseItem) => {
@@ -56,14 +59,15 @@ export default function Stockcount() {
     const ok = await confirm({ title: 'Добавить из остатков', message: 'Загрузить все позиции?' });
     if (!ok) return;
     setLoadingAll(true);
-    try {
-      const { items, error } = await getAllWarehouseItems();
-      if (error) return toast('error', error);
-      setRows((prev) => {
-        const existing = new Set(prev.map((r) => rowKey(r.name, r.article)));
-        return [...prev, ...items.filter(i => i.stock > 0 && !existing.has(rowKey(i.name, i.article))).map(i => ({ ...i, fact: '' }))];
-      });
-    } catch (e) { toast('error', String(e)); } finally { setLoadingAll(false); }
+    const result = await api.getAllWarehouseItems();
+    setLoadingAll(false);
+    if (!result) return;
+
+    const { items } = result;
+    setRows((prev) => {
+      const existing = new Set(prev.map((r) => rowKey(r.name, r.article)));
+      return [...prev, ...items.filter(i => i.stock > 0 && !existing.has(rowKey(i.name, i.article))).map(i => ({ ...i, fact: '' }))];
+    });
   };
 
   const negatives = useMemo(() => {

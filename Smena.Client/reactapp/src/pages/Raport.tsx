@@ -1,13 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import {
-  getConstants,
-  getCurrentSafe,
-  getEmployees,
-  sendRaportWithPhoto,
-  subscribeToSafeChanges,
-  type Employee,
-  type ShiftConstants,
-} from '../bridge/api';
+import { subscribeToSafeChanges, type Employee, type ShiftConstants } from '../bridge/api';
+import { useApiEngine } from '../bridge/engine';
 import { Button, NumberField, Panel, Select, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
@@ -31,6 +24,7 @@ const defaultConstants: ShiftConstants = {
 };
 
 export default function Raport() {
+  const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -52,9 +46,9 @@ export default function Raport() {
   const [progress, setProgress] = useState('');
 
   useEffect(() => {
-    getConstants().then(setConstants).catch((e) => toast('error', String(e)));
-    getEmployees().then(setEmployees).catch((e) => toast('error', String(e)));
-    getCurrentSafe().then(setProgramSafe).catch(() => {});
+    api.getConstants().then((c) => c && setConstants(c));
+    api.getEmployees().then((list) => list && setEmployees(list));
+    api.getCurrentSafe().then((v) => v !== null && setProgramSafe(v));
     // Вкладка не размонтируется после первого открытия (App.tsx держит все табы
     // смонтированными через display:none), поэтому одного getCurrentSafe() на mount
     // недостаточно — без подписки programSafe замирает на значении из момента первого
@@ -153,38 +147,36 @@ export default function Raport() {
 
     setBusy(true);
     setProgress('Запрашиваю фото…');
-    try {
-      const result = await sendRaportWithPhoto({
-        factCash: factCashN, factNonCash: factNonCashN, programCash: programCashN,
-        programNonCash: programNonCashN, factSafe: factSafeN, whyMinus,
-        employees: activeRows.map((r) => ({ employeeId: r.employeeId, hours: parseIntSafe(r.hours), minus: parseIntSafe(r.minus) })),
-      }, setProgress);
 
-      // Раньше здесь не проверялся result.success — sendRaportWithPhoto не бросает
-      // исключение, если сервер отклонил отчёт по бизнес-правилам (например,
-      // "Сумма минусов должна быть равна N"), он просто возвращает {success:false,
-      // message}. Из-за этого форма показывала "Отчёт отправлен" и чистилась даже
-      // когда отчёт реально не был сохранён на сервере — без единой ошибки и без
-      // строки в серверных логах (это не исключение, а штатный отказ валидации).
-      if (!result.success) {
-        toast('error', result.message || 'Сервер отклонил отчёт.');
-        return;
-      }
+    // result.success === false (сервер отклонил отчёт по бизнес-правилам, например
+    // "Сумма минусов должна быть равна N") и сетевые/JSON-исключения теперь ловит
+    // и тостит Engine одинаково — раньше именно рассинхрон между "не бросает
+    // исключение" и "нужно проверять result.success" был источником бага, когда
+    // форма показывала "Отчёт отправлен" и чистилась, даже если отчёт не сохранился.
+    const result = await api.sendRaportWithPhoto({
+      factCash: factCashN, factNonCash: factNonCashN, programCash: programCashN,
+      programNonCash: programNonCashN, factSafe: factSafeN, whyMinus,
+      employees: activeRows.map((r) => ({ employeeId: r.employeeId, hours: parseIntSafe(r.hours), minus: parseIntSafe(r.minus) })),
+    }, setProgress);
 
-      toast('success', 'Отчёт отправлен.');
+    setBusy(false);
+    setProgress('');
 
-      // Очистка кэша после отправки
-      localStorage.removeItem('raport_rows');
-      localStorage.removeItem('raport_factCash');
-      localStorage.removeItem('raport_factNonCash');
-      localStorage.removeItem('raport_programCash');
-      localStorage.removeItem('raport_programNonCash');
-      localStorage.removeItem('raport_factSafe');
-      localStorage.removeItem('raport_whyMinus');
+    if (!result) return;
 
-      setRows([{ ...emptyRow }]);
-      setFactCash(''); setFactNonCash(''); setProgramCash(''); setProgramNonCash(''); setFactSafe(''); setWhyMinus('');
-    } catch (e) { toast('error', String(e)); } finally { setBusy(false); setProgress(''); }
+    toast('success', 'Отчёт отправлен.');
+
+    // Очистка кэша после отправки
+    localStorage.removeItem('raport_rows');
+    localStorage.removeItem('raport_factCash');
+    localStorage.removeItem('raport_factNonCash');
+    localStorage.removeItem('raport_programCash');
+    localStorage.removeItem('raport_programNonCash');
+    localStorage.removeItem('raport_factSafe');
+    localStorage.removeItem('raport_whyMinus');
+
+    setRows([{ ...emptyRow }]);
+    setFactCash(''); setFactNonCash(''); setProgramCash(''); setProgramNonCash(''); setFactSafe(''); setWhyMinus('');
   };
 
   return (

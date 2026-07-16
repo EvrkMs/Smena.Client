@@ -1,25 +1,28 @@
 import { useEffect, useState } from 'react';
-import { addEmployee, getEmployees, type Employee } from '../bridge/api';
+import type { Employee } from '../bridge/api';
+import { useApiEngine } from '../bridge/engine';
 import { Button, NumberField, Panel, TextField } from '../components/ui/primitives';
 import { useToast } from '../components/ui/Toast';
 
 const emptyForm = { name: '', hourlyRate: '', telegramId: '', salaryThreadId: '' };
 
 export default function Employees() {
+  const api = useApiEngine();
   const toast = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const reload = () => {
-    getEmployees()
-      .then(setEmployees)
-      .catch((e) => toast('error', String(e)))
-      .finally(() => setLoading(false));
+  const reload = async () => {
+    const list = await api.getEmployees();
+    if (list) setEmployees(list);
+    setLoading(false);
   };
 
-  useEffect(reload, []);
+  useEffect(() => {
+    reload();
+  }, []);
 
   const handleAdd = async () => {
     if (!form.name.trim()) return toast('error', 'Введите имя сотрудника.');
@@ -28,24 +31,17 @@ export default function Employees() {
     if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) return toast('error', 'Введите корректную ставку.');
 
     setBusy(true);
-    try {
-      const res = await addEmployee({
-        name: form.name.trim(),
-        hourlyRate,
-        telegramId: form.telegramId ? Number(form.telegramId) : 0,
-        salaryThreadId: form.salaryThreadId ? Number(form.salaryThreadId) : 0,
-      });
-      if (res.success) {
-        setForm(emptyForm);
-        toast('success', 'Сотрудник добавлен.');
-        reload();
-      } else {
-        toast('error', res.message || 'Сервер вернул ошибку.');
-      }
-    } catch (e) {
-      toast('error', String(e));
-    } finally {
-      setBusy(false);
+    const res = await api.addEmployee({
+      name: form.name.trim(),
+      hourlyRate,
+      telegramId: form.telegramId ? Number(form.telegramId) : 0,
+      salaryThreadId: form.salaryThreadId ? Number(form.salaryThreadId) : 0,
+    });
+    setBusy(false);
+    if (res) {
+      setForm(emptyForm);
+      toast('success', 'Сотрудник добавлен.');
+      reload();
     }
   };
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getEmployees, sendExpense, sendExpenseWithPhoto, type Employee } from '../bridge/api';
+import type { Employee } from '../bridge/api';
+import { useApiEngine } from '../bridge/engine';
 import { Button, Checkbox, NumberField, Panel, Select, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
@@ -7,6 +8,7 @@ import { formatMoney, parseIntSafe } from '../lib/format';
 
 /** Эквивалент ExpenseUserControl: расход (из сейфа или нет), опционально с запросом фото у сотрудника. */
 export default function Expense() {
+  const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -19,7 +21,7 @@ export default function Expense() {
   const [progress, setProgress] = useState('');
 
   useEffect(() => {
-    getEmployees().then(setEmployees).catch((e) => toast('error', String(e)));
+    api.getEmployees().then((list) => list && setEmployees(list));
   }, []);
 
   const handleSubmit = async () => {
@@ -40,26 +42,16 @@ export default function Expense() {
     if (!ok) return;
 
     setBusy(true);
-    try {
-      const res = sendPhoto
-        ? await sendExpenseWithPhoto(
-            { amount: value, comment, fromSafe, employeeId, senderName: employee?.name },
-            setProgress,
-          )
-        : await sendExpense({ amount: value, comment, fromSafe });
+    const res = sendPhoto
+      ? await api.sendExpenseWithPhoto({ amount: value, comment, fromSafe, employeeId, senderName: employee?.name }, setProgress)
+      : await api.sendExpense({ amount: value, comment, fromSafe });
+    setBusy(false);
+    setProgress('');
 
-      if (res.success) {
-        toast('success', 'Расход проведён.');
-        setAmount('');
-        setComment('');
-      } else {
-        toast('error', res.message || 'Сервер вернул ошибку.');
-      }
-    } catch (e) {
-      toast('error', String(e));
-    } finally {
-      setBusy(false);
-      setProgress('');
+    if (res) {
+      toast('success', 'Расход проведён.');
+      setAmount('');
+      setComment('');
     }
   };
 

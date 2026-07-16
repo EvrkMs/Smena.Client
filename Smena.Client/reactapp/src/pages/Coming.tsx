@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { addSafeComing, getCurrentSafe, subscribeToSafeChanges } from '../bridge/api';
+import { subscribeToSafeChanges } from '../bridge/api';
+import { useApiEngine } from '../bridge/engine';
 import { Button, NumberField, Panel, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
@@ -7,6 +8,7 @@ import { formatMoney, parseIntSafe } from '../lib/format';
 
 /** Эквивалент ComingUserControl: только положительный приход в сейф, без варианта расхода. */
 export default function Coming() {
+  const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
   const [current, setCurrent] = useState<number | null>(null);
@@ -15,7 +17,7 @@ export default function Coming() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getCurrentSafe().then(setCurrent).catch((e) => toast('error', String(e)));
+    api.getCurrentSafe().then((v) => v !== null && setCurrent(v));
     return subscribeToSafeChanges(setCurrent);
   }, []);
 
@@ -30,19 +32,12 @@ export default function Coming() {
     if (!ok) return;
 
     setBusy(true);
-    try {
-      const res = await addSafeComing(value, comment);
-      if (res.success) {
-        toast('success', 'Приход зафиксирован.');
-        setAmount('');
-        setComment('');
-      } else {
-        toast('error', res.message || 'Сервер вернул ошибку.');
-      }
-    } catch (e) {
-      toast('error', String(e));
-    } finally {
-      setBusy(false);
+    const res = await api.addSafeComing(value, comment);
+    setBusy(false);
+    if (res) {
+      toast('success', 'Приход зафиксирован.');
+      setAmount('');
+      setComment('');
     }
   };
 

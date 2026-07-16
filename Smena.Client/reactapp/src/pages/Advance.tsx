@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getCurrentSalary, getEmployees, sendAdvance, type Employee } from '../bridge/api';
+import type { Employee } from '../bridge/api';
+import { useApiEngine } from '../bridge/engine';
 import { Button, Checkbox, NumberField, Panel, Select } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
@@ -9,6 +10,7 @@ type Kind = 'advance' | 'salary';
 
 /** Эквивалент AdvanceUserControl: выдача аванса или ЗП, наличные/безнал, из сейфа или нет. */
 export default function Advance() {
+  const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -20,7 +22,7 @@ export default function Advance() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getEmployees().then(setEmployees).catch((e) => toast('error', String(e)));
+    api.getEmployees().then((list) => list && setEmployees(list));
   }, []);
 
   const handleSubmit = async () => {
@@ -28,13 +30,12 @@ export default function Advance() {
     const value = parseIntSafe(amount);
     if (value <= 0) return toast('error', 'Введите сумму больше нуля.');
 
-    let salaryCheck: { success: boolean; currentSalary: number; message: string };
-    try {
-      salaryCheck = await getCurrentSalary(employeeId);
-    } catch (e) {
-      return toast('error', String(e));
-    }
-    if (!salaryCheck.success) return toast('error', salaryCheck.message || 'Не удалось получить текущую ЗП.');
+    // getCurrentSalary — обычный вызов через Engine: если провалится (сеть/success:false),
+    // тост уже показан, дальше идти незачем.
+    const salaryCheck = await api.getCurrentSalary(employeeId);
+    if (!salaryCheck) return;
+    // А вот "сумма больше начисленного" — доменное правило конкретно этого экрана,
+    // не ошибка API, поэтому остаётся здесь, а не в Engine.
     if (value > salaryCheck.currentSalary) {
       return toast(
         'error',
@@ -52,25 +53,18 @@ export default function Advance() {
     if (!ok) return;
 
     setBusy(true);
-    try {
-      const res = await sendAdvance({
-        employeeId,
-        amount: value,
-        isNonCash,
-        isSalary: kind === 'salary',
-        extractFromSafe,
-        comment: kind === 'salary' ? 'ЗП' : 'Аванс',
-      });
-      if (res.success) {
-        toast('success', 'Выдача проведена.');
-        setAmount('');
-      } else {
-        toast('error', res.message || 'Сервер вернул ошибку.');
-      }
-    } catch (e) {
-      toast('error', String(e));
-    } finally {
-      setBusy(false);
+    const res = await api.sendAdvance({
+      employeeId,
+      amount: value,
+      isNonCash,
+      isSalary: kind === 'salary',
+      extractFromSafe,
+      comment: kind === 'salary' ? 'ЗП' : 'Аванс',
+    });
+    setBusy(false);
+    if (res) {
+      toast('success', 'Выдача проведена.');
+      setAmount('');
     }
   };
 

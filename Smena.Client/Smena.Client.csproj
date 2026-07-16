@@ -32,4 +32,34 @@
 		</None>
 	</ItemGroup>
 
+	<!--
+		reactapp/ - это отдельный npm-проект внутри папки C#-проекта. SDK-style .csproj по
+		умолчанию глобит ВСЁ под своей директорией как None-items, включая node_modules -
+		без Remove ниже IDE/dotnet build будут пытаться проиндексировать/скопировать
+		десятки тысяч файлов из node_modules.
+	-->
+	<ItemGroup>
+		<Compile Remove="reactapp/**" />
+		<Content Remove="reactapp/**" />
+		<None Remove="reactapp/**" />
+		<EmbeddedResource Remove="reactapp/**" />
+	</ItemGroup>
+
+	<!--
+		Собирает reactapp (Vite) и копирует результат в $(OutDir)webui, откуда его
+		грузит MainForm.cs через SetVirtualHostNameToFolderMapping. ItemGroup с
+		ReactAppDist объявлен ВНУТРИ таргета намеренно: если вынести его на верхний
+		уровень .csproj, MSBuild вычислит glob на этапе evaluation - до того, как
+		npm run build успеет создать dist/, и файлы просто не попадут в сборку.
+		Отключить локально: dotnet build -p:SkipReactAppBuild=true
+	-->
+	<Target Name="BuildAndCopyReactApp" AfterTargets="Build" Condition="'$(SkipReactAppBuild)' != 'true'">
+		<Exec Command="npm ci" WorkingDirectory="reactapp" Condition="!Exists('reactapp/node_modules')" />
+		<Exec Command="npm run build" WorkingDirectory="reactapp" />
+		<ItemGroup>
+			<ReactAppDist Include="reactapp/dist/**/*.*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(ReactAppDist)" DestinationFolder="$(OutDir)webui\%(RecursiveDir)" SkipUnchangedFiles="true" />
+	</Target>
+
 </Project>

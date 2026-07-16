@@ -7,7 +7,8 @@ import Raport from './pages/Raport';
 import Stockcount from './pages/Stockcount';
 import { SafeTicker } from './components/SafeTicker';
 import { Splash } from './components/Splash';
-import { getCurrentSafe, subscribeToSafeChanges } from './bridge/api';
+import { subscribeToSafeChanges } from './bridge/api';
+import { useApiEngine } from './bridge/engine';
 import './App.css';
 
 const tabs = [
@@ -22,6 +23,7 @@ const tabs = [
 type TabKey = (typeof tabs)[number]['key'];
 
 export default function App() {
+  const api = useApiEngine();
   const [active, setActive] = useState<TabKey>('raport');
   // Вкладка монтируется один раз при первом посещении и больше не размонтируется —
   // так стейт формы (введённые суммы, строки отчёта и т.п.) не обнуляется при
@@ -31,9 +33,13 @@ export default function App() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    getCurrentSafe()
-      .then(setSafe)
-      .catch(() => {})
+    // Раньше ошибка тут глушилась молча (catch(() => {})) — через Engine она,
+    // как и везде, всплывёт тостом слева. На готовность экрана (ready) это не
+    // влияет: сплэш всё равно снимается через finally, SafeTicker сам покажет
+    // "------" при null, а подписка ниже подхватит значение, как только сервер
+    // станет доступен.
+    api.getCurrentSafe()
+      .then((v) => v !== null && setSafe(v))
       .finally(() => setReady(true));
     return subscribeToSafeChanges(setSafe);
   }, []);
