@@ -122,17 +122,13 @@ internal sealed class MainForm : Form
         }
 
         var core = webView.CoreWebView2;
-        // ВРЕМЕННО true для диагностики: без DevTools JS-исключения в WebView2 никак
-        // не видны пользователю (проверено на практике — именно это и произошло с
-        // багом в GetConstants/StartPhotoRequest). Верните false перед финальным релизом,
-        // когда убедитесь, что ErrorBoundary в React ловит всё видимым образом.
-        core.Settings.AreDevToolsEnabled = true;
-        // Перед релизом вместе с AreDevToolsEnabled=false раскомментируйте строку ниже.
-        // F5/Ctrl+R перезагружают страницу WebView2: JS теряет запущенный сценарий
-        // (например, отправку расхода с фото), а C# доводит его до конца — риск
-        // двойного проведения операции. Отключение закрывает и остальные браузерные
-        // хоткеи (Ctrl+P, Ctrl+F...), но также и F12 — поэтому только вместе с DevTools.
-        // core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        // DevTools отключены — для диагностики они больше не нужны (JS-ошибки ловит
+        // ErrorBoundary, транспортные — Engine тостами, C#-ошибки пишутся в errors.log).
+        core.Settings.AreDevToolsEnabled = false;
+        // Браузерные хоткеи отключены: F5/Ctrl+R перезагружали страницу WebView2 —
+        // JS терял запущенный сценарий (например, отправку расхода с фото), а C#
+        // доводил его до конца: риск двойного проведения операции.
+        core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
 
         var webUiFolder = Path.Combine(AppContext.BaseDirectory, "webui");
