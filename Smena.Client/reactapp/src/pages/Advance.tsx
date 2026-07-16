@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import type { Employee } from '../bridge/api';
+import { useState } from 'react';
 import { useApiEngine } from '../bridge/engine';
 import { Button, Checkbox, NumberField, Panel, Select } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
+import { useEmployees } from '../lib/appData';
 import { formatMoney, parseIntSafe } from '../lib/format';
 
 type Kind = 'advance' | 'salary';
@@ -13,17 +13,15 @@ export default function Advance() {
   const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // Из общего store — обновляется App-ом (кнопка «Обновить», полинг) и после
+  // добавления сотрудника на вкладке «Сотрудники»; локальная загрузка устаревала.
+  const employees = useEmployees();
   const [employeeId, setEmployeeId] = useState('');
   const [amount, setAmount] = useState('');
   const [kind, setKind] = useState<Kind>('advance');
   const [isNonCash, setIsNonCash] = useState(false);
   const [extractFromSafe, setExtractFromSafe] = useState(true);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api.getEmployees().then((list) => list && setEmployees(list));
-  }, []);
 
   const handleSubmit = async () => {
     if (!employeeId) return toast('error', 'Выберите сотрудника.');

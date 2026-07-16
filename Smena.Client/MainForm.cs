@@ -127,6 +127,12 @@ internal sealed class MainForm : Form
         // багом в GetConstants/StartPhotoRequest). Верните false перед финальным релизом,
         // когда убедитесь, что ErrorBoundary в React ловит всё видимым образом.
         core.Settings.AreDevToolsEnabled = true;
+        // Перед релизом вместе с AreDevToolsEnabled=false раскомментируйте строку ниже.
+        // F5/Ctrl+R перезагружают страницу WebView2: JS теряет запущенный сценарий
+        // (например, отправку расхода с фото), а C# доводит его до конца — риск
+        // двойного проведения операции. Отключение закрывает и остальные браузерные
+        // хоткеи (Ctrl+P, Ctrl+F...), но также и F12 — поэтому только вместе с DevTools.
+        // core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
 
         var webUiFolder = Path.Combine(AppContext.BaseDirectory, "webui");

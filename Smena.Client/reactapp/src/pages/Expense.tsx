@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import type { Employee } from '../bridge/api';
+import { useState } from 'react';
 import { useApiEngine } from '../bridge/engine';
 import { Button, Checkbox, NumberField, Panel, Select, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
+import { useEmployees } from '../lib/appData';
 import { formatMoney, parseIntSafe } from '../lib/format';
 
 /** Эквивалент ExpenseUserControl: расход (из сейфа или нет), опционально с запросом фото у сотрудника. */
@@ -11,7 +11,8 @@ export default function Expense() {
   const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // Из общего store — см. lib/appData.ts (вкладки не размонтируются, локальный список устаревал).
+  const employees = useEmployees();
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
   const [fromSafe, setFromSafe] = useState(true);
@@ -19,10 +20,6 @@ export default function Expense() {
   const [employeeId, setEmployeeId] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
-
-  useEffect(() => {
-    api.getEmployees().then((list) => list && setEmployees(list));
-  }, []);
 
   const handleSubmit = async () => {
     const value = parseIntSafe(amount);

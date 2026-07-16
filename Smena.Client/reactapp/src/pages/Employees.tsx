@@ -1,28 +1,19 @@
-import { useEffect, useState } from 'react';
-import type { Employee } from '../bridge/api';
+import { useState } from 'react';
 import { useApiEngine } from '../bridge/engine';
 import { Button, NumberField, Panel, TextField } from '../components/ui/primitives';
 import { useToast } from '../components/ui/Toast';
+import { refreshEmployees, useEmployees } from '../lib/appData';
 
 const emptyForm = { name: '', hourlyRate: '', telegramId: '', salaryThreadId: '' };
 
 export default function Employees() {
   const api = useApiEngine();
   const toast = useToast();
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // Список — из общего store: refreshEmployees() ниже обновит его сразу во всех
+  // вкладках (Отчёт, Аванс, Расход), а не только здесь.
+  const employees = useEmployees();
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const reload = async () => {
-    const list = await api.getEmployees();
-    if (list) setEmployees(list);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    reload();
-  }, []);
 
   const handleAdd = async () => {
     if (!form.name.trim()) return toast('error', 'Введите имя сотрудника.');
@@ -41,16 +32,14 @@ export default function Employees() {
     if (res) {
       setForm(emptyForm);
       toast('success', 'Сотрудник добавлен.');
-      reload();
+      refreshEmployees().catch((e) => toast('error', e instanceof Error ? e.message : String(e)));
     }
   };
 
   return (
     <div className="screen-grid">
       <Panel title="Сотрудники">
-        {loading ? (
-          <p className="muted">Загрузка…</p>
-        ) : employees.length === 0 ? (
+        {employees.length === 0 ? (
           <p className="muted">Список пуст.</p>
         ) : (
           <ul className="ledger-list">

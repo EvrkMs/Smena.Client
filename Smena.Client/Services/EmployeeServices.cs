@@ -10,33 +10,32 @@ public class EmployeeService(GrpcService grpcService)
     private readonly GrpcEmployeeService.GrpcEmployeeServiceClient _client = new(grpcService.CallInvoker);
     public BindingList<GrpcEmployee> Employees { get; } = [];
 
+    /// <summary>
+    /// Ошибки загрузки НЕ глотаются (раньше catch молчал, и при недоступном сервере
+    /// UI показывал "Список пуст" без единой ошибки — офлайн был неотличим от пустой
+    /// базы). Исключение уходит через мост в JS как rejected Promise: Engine покажет
+    /// тост, а App включит бейдж "нет связи" и полинг.
+    /// </summary>
     public async Task LoadOrReloadListAsync(CancellationToken ct = default)
     {
+        var response = await _client.EmployeesListAsync(new Empty(), cancellationToken: ct);
+        if (response?.Employees == null) return;
+
+        var items = response.Employees.ToList();
+
+        Employees.RaiseListChangedEvents = false;
         try
         {
-            var response = await _client.EmployeesListAsync(new Empty(), cancellationToken: ct);
-            if (response?.Employees == null) return;
-
-            var items = response.Employees.ToList();
-
-            Employees.RaiseListChangedEvents = false;
-            try
+            Employees.Clear();
+            foreach (var employee in items)
             {
-                Employees.Clear();
-                foreach (var employee in items)
-                {
-                    Employees.Add(employee);
-                }
-            }
-            finally
-            {
-                Employees.RaiseListChangedEvents = true;
-                Employees.ResetBindings();
+                Employees.Add(employee);
             }
         }
-        catch
+        finally
         {
-            // Silently ignore on load — the list stays empty.
+            Employees.RaiseListChangedEvents = true;
+            Employees.ResetBindings();
         }
     }
 
@@ -52,11 +51,21 @@ public class EmployeeService(GrpcService grpcService)
                 return (false, res?.Message ?? "Server returned empty response");
             }
 
-            await LoadOrReloadListAsync(ct);
+            try
+            {
+                await LoadOrReloadListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                // Добавление уже прошло на сервере — не превращаем сбой обновления
+                // списка в ложную ошибку добавления; UI перезапросит список сам.
+                ErrorLog.Write("EmployeeList reload after add", ex);
+            }
             return (true, res.Message ?? string.Empty);
         }
         catch (Exception ex)
         {
+            ErrorLog.Write("EmployeeAdd", ex);
             return (false, ex.Message);
         }
     }

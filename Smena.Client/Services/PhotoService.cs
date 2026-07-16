@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
 using Host.Grpc.Services.SendPhoto;
+using Smena.Client.Helpers;
 
 namespace Smena.Client.Services;
 
@@ -52,10 +53,12 @@ public class PhotoService(GrpcService grpcService)
         }
         catch (RpcException ex)
         {
+            ErrorLog.Write("RequestPhotos", ex);
             return (false, $"gRPC error: {ex.StatusCode} - {ex.Status.Detail}", null);
         }
         catch (Exception ex)
         {
+            ErrorLog.Write("RequestPhotos", ex);
             return (false, $"Error: {ex.Message}", null);
         }
     }

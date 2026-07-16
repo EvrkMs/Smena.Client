@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes } from 'react';
+import { forwardRef, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes } from 'react';
 import './primitives.css';
 
 export function Button({
@@ -11,7 +11,10 @@ export function Button({
 
 export const TextField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label?: string }>(
   ({ label, className = '', id, ...props }, ref) => {
-    const inputId = id ?? label?.replace(/\s+/g, '-').toLowerCase();
+    // id из label давал ДУБЛИ в DOM (в отчёте у каждой строки поля "Часы"/"Минус"),
+    // и клик по label чужой строки фокусировал первый инпут. useId уникален всегда.
+    const autoId = useId();
+    const inputId = id ?? autoId;
     return (
       <label className="field" htmlFor={inputId}>
         {label && <span className="field-label">{label}</span>}
@@ -32,7 +35,8 @@ export const NumberField = forwardRef<
     onValueChange: (value: string) => void;
   }
 >(({ label, value, maxDigits, onValueChange, className = '', id, ...props }, ref) => {
-  const inputId = id ?? label?.replace(/\s+/g, '-').toLowerCase();
+  const autoId = useId();
+  const inputId = id ?? autoId;
   return (
     <label className="field" htmlFor={inputId}>
       {label && <span className="field-label">{label}</span>}
@@ -60,7 +64,8 @@ export function Select({
   id,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
-  const selectId = id ?? label?.replace(/\s+/g, '-').toLowerCase();
+  const autoId = useId();
+  const selectId = id ?? autoId;
   return (
     <label className="field" htmlFor={selectId}>
       {label && <span className="field-label">{label}</span>}
