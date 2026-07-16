@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Smena.Client.Helpers;
 using Smena.Client.Services;
 using System;
 using System.Windows.Forms;
@@ -13,6 +14,7 @@ internal static class Program
 		Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
 		Application.ThreadException += (_, e) =>
 		{
+			ErrorLog.Write("UI thread", e.Exception);
 			MessageBox.Show(
 				$"Непредвиденная ошибка:\n{e.Exception.Message}",
 				"Ошибка",
@@ -23,6 +25,7 @@ internal static class Program
 		{
 			if (e.ExceptionObject is Exception ex)
 			{
+				ErrorLog.Write("Unhandled", ex);
 				MessageBox.Show(
 					$"Критическая ошибка:\n{ex.Message}",
 					"Ошибка",
@@ -31,27 +34,47 @@ internal static class Program
 			}
 		};
 
+		// Конфиг из двух мест: appsettings.json рядом с exe (как раньше) и
+		// %LOCALAPPDATA%\Smena.Client\appsettings.json — файл, который создаёт
+		// ConnectionSetupForm при первом запуске. Локальный добавлен ПОСЛЕ и потому
+		// перекрывает поставляемый с приложением.
 		var config = new ConfigurationBuilder()
 			.SetBasePath(AppContext.BaseDirectory)
 			.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+			.AddJsonFile(LocalConfigPath, optional: true, reloadOnChange: false)
 			.Build();
 
 		var address = ResolveGrpcAddress(config);
 		var apiKey = ResolveApiKey(config);
 		var pathPrefix = config["Grpc:PathPrefix"];
 
+		// Адрес не нашли нигде — первый запуск (или конфиг удалили): спрашиваем у
+		// пользователя и сохраняем в LocalConfigPath. Отказ от ввода = выход.
+		if (string.IsNullOrWhiteSpace(address))
+		{
+			var entered = ConnectionSetupForm.Prompt(LocalConfigPath, "https://", apiKey, pathPrefix);
+			if (entered is null)
+			{
+				return;
+			}
+			(address, apiKey, pathPrefix) = entered.Value;
+		}
+
 		var grpcService = new GrpcService(address, apiKey, pathPrefix);
 		Application.Run(new MainForm(grpcService));
 	}
 
-	private static string ResolveGrpcAddress(IConfiguration config)
+	private static string LocalConfigPath => Path.Combine(
+		Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+		"Smena.Client", "appsettings.json");
+
+	private static string? ResolveGrpcAddress(IConfiguration config)
 	{
 		return
 			config["Grpc:Address"] ??
 			Environment.GetEnvironmentVariable("AVA_SMENA_GRPC_ADDRESS") ??
 			Environment.GetEnvironmentVariable("Grpc__Address") ??
-			BuildGrpcAddressFromEnvironment() ??
-			"http://localhost:5001";
+			BuildGrpcAddressFromEnvironment();
 	}
 
 	private static string ResolveApiKey(IConfiguration config)

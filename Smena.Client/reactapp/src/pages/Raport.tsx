@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
-import { subscribeToSafeChanges, type Employee, type ShiftConstants } from '../bridge/api';
+import type { ShiftConstants } from '../bridge/api';
 import { useApiEngine } from '../bridge/engine';
+import { useEmployees, useSafe } from '../lib/appData';
 import { Button, NumberField, Panel, Select, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
@@ -29,8 +30,12 @@ export default function Raport() {
   const confirm = useConfirm();
 
   const [constants, setConstants] = useState<ShiftConstants>(defaultConstants);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  
+  // Сотрудники и сейф — из общего store (lib/appData): вкладка не размонтируется,
+  // и локальная загрузка "на mount" здесь устаревала (новый сотрудник не появлялся,
+  // programSafe замирал и расходился с сервером — см. историю в appData.ts).
+  const employees = useEmployees();
+  const programSafe = useSafe();
+
   // Кешируемые состояния
   const [rows, setRows] = usePersistedState<Row[]>('raport_rows', [{ ...emptyRow }]);
   const [factCash, setFactCash] = usePersistedState('raport_factCash', '');
@@ -40,23 +45,11 @@ export default function Raport() {
   const [factSafe, setFactSafe] = usePersistedState('raport_factSafe', '');
   const [whyMinus, setWhyMinus] = usePersistedState('raport_whyMinus', '');
 
-  // Состояния, которые не нужно кешировать (данные из API)
-  const [programSafe, setProgramSafe] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
 
   useEffect(() => {
     api.getConstants().then((c) => c && setConstants(c));
-    api.getEmployees().then((list) => list && setEmployees(list));
-    api.getCurrentSafe().then((v) => v !== null && setProgramSafe(v));
-    // Вкладка не размонтируется после первого открытия (App.tsx держит все табы
-    // смонтированными через display:none), поэтому одного getCurrentSafe() на mount
-    // недостаточно — без подписки programSafe замирает на значении из момента первого
-    // открытия вкладки и дальше расходится с реальным сейфом. Именно это приводило
-    // к тому, что "Расхождение по сейфу" в предпросмотре не совпадало с тем, что
-    // реально проверяет сервер при отправке отчёта (сервер берёт currentSafe свежим
-    // из БД), из-за чего сумма "минусов" не сходилась и отчёт отклонялся.
-    return subscribeToSafeChanges(setProgramSafe);
   }, []);
 
   const activeRows = rows.filter((r) => r.employeeId);
@@ -123,12 +116,36 @@ export default function Raport() {
 
   const handleSend = async () => {
     if (activeRows.length === 0) return toast('error', 'Добавьте сотрудника.');
+    // Пока сумма в сейфе не получена, "Расхождение по сейфу" в предпросмотре — это
+    // фиктивный 0: сервер посчитает недостачу по реальному сейфу, минусы не сойдутся,
+    // а кассир узнает об этом только после ожидания фото. Не даём отправить вслепую.
+    if (programSafe === null) {
+      return toast('error', 'Сумма в сейфе ещё не получена с сервера — нажмите «Обновить» в шапке.');
+    }
     // Раньше это узнавали только после ответа сервера — уже дождавшись фото от
     // сотрудника через Telegram. Теперь считаем ту же сумму заранее и просто не
     // даём отправить, пока минус не сойдётся — кнопка ниже задизейблена тем же
     // условием (minusMismatch), это дублирующая проверка на случай гонки.
     if (minusMismatch) return toast('error', `Сумма минусов должна быть равна ${totalMinusExpected}, введено ${totalMinusEntered}.`);
     if (cashDiscrepancy < 0 && !whyMinus.trim()) return toast('error', 'Укажите причину недостачи.');
+
+    // Пустое поле и введённый 0 для расчётов неотличимы (parseIntSafe('') === 0),
+    // поэтому забытое поле кассы молча уезжало на сервер нулём. Как и с сейфом ниже —
+    // не блокируем (бывают смены, где 0 — правда), но требуем явного подтверждения.
+    const emptyCashFields = [
+      [factCash, 'Факт нал.'],
+      [factNonCash, 'Факт безнал.'],
+      [programCash, 'Программа нал.'],
+      [programNonCash, 'Программа безнал.'],
+      [factSafe, 'Факт в сейфе'],
+    ].filter(([value]) => value === '').map(([, label]) => label);
+    if (emptyCashFields.length > 0) {
+      const okEmpty = await confirm({
+        title: 'Пустые поля кассы',
+        message: `Не заполнено: ${emptyCashFields.join(', ')}. Эти значения уйдут в отчёт как 0. Продолжить?`,
+      });
+      if (!okEmpty) return;
+    }
 
     // Доп. модалка именно на расхождение по сейфу — отдельно от общего
     // подтверждения ниже. Даже если минус уже сходится (проверка выше это
@@ -187,10 +204,14 @@ export default function Raport() {
             <div className="raport-row" key={i}>
               <Select label={`Сотрудник ${i + 1}`} value={row.employeeId} onChange={(e) => updateRow(i, { employeeId: e.target.value })}>
                 <option value="">— не выбран —</option>
-                {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                {employees
+                  // Один человек — одна строка смены: уже выбранные в других строках
+                  // не предлагаются (свой текущий выбор остаётся, иначе Select "слетит").
+                  .filter((e) => e.id === row.employeeId || !rows.some((r, ri) => ri !== i && r.employeeId === e.id))
+                  .map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
               </Select>
-              <NumberField label="Часы" value={row.hours} onValueChange={(v) => handleHoursChange(i, v)} disabled={!row.employeeId} />
-              <NumberField label="Минус" value={row.minus} onValueChange={(v) => updateRow(i, { minus: v })} disabled={!row.employeeId} />
+              <NumberField label="Часы" value={row.hours} maxDigits={constants.maxHoursDigits} onValueChange={(v) => handleHoursChange(i, v)} disabled={!row.employeeId} />
+              <NumberField label="Минус" value={row.minus} maxDigits={constants.maxAmountDigits} onValueChange={(v) => updateRow(i, { minus: v })} disabled={!row.employeeId} />
             </div>
           ))}
           <p className="muted tabular" style={{ marginTop: 4 }}>Часов по смене: {totalHours} / {constants.maxHoursPerShift}</p>
@@ -212,12 +233,12 @@ export default function Raport() {
 
       <Panel title="Касса">
         <div className="raport-stack">
-          <NumberField label="Факт нал., ₽" value={factCash} onValueChange={setFactCash} />
-          <NumberField label="Факт безнал., ₽" value={factNonCash} onValueChange={setFactNonCash} />
-          <NumberField label="Программа нал., ₽" value={programCash} onValueChange={setProgramCash} />
-          <NumberField label="Программа безнал., ₽" value={programNonCash} onValueChange={setProgramNonCash} />
+          <NumberField label="Факт нал., ₽" value={factCash} maxDigits={constants.maxAmountDigits} onValueChange={setFactCash} />
+          <NumberField label="Факт безнал., ₽" value={factNonCash} maxDigits={constants.maxAmountDigits} onValueChange={setFactNonCash} />
+          <NumberField label="Программа нал., ₽" value={programCash} maxDigits={constants.maxAmountDigits} onValueChange={setProgramCash} />
+          <NumberField label="Программа безнал., ₽" value={programNonCash} maxDigits={constants.maxAmountDigits} onValueChange={setProgramNonCash} />
         </div>
-        <NumberField label="Факт в сейфе, ₽" value={factSafe} onValueChange={setFactSafe} />
+        <NumberField label="Факт в сейфе, ₽" value={factSafe} maxDigits={constants.maxAmountDigits} onValueChange={setFactSafe} />
         {cashDiscrepancy < 0 && <TextField label="Причина недостачи" value={whyMinus} onChange={(e) => setWhyMinus(e.target.value)} />}
       </Panel>
 

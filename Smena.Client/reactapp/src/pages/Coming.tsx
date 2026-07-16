@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { subscribeToSafeChanges } from '../bridge/api';
+import { useState } from 'react';
 import { useApiEngine } from '../bridge/engine';
 import { Button, NumberField, Panel, TextField } from '../components/ui/primitives';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/Toast';
+import { useSafe } from '../lib/appData';
 import { formatMoney, parseIntSafe } from '../lib/format';
 
 /** Эквивалент ComingUserControl: только положительный приход в сейф, без варианта расхода. */
@@ -11,15 +11,11 @@ export default function Coming() {
   const api = useApiEngine();
   const toast = useToast();
   const confirm = useConfirm();
-  const [current, setCurrent] = useState<number | null>(null);
+  // Из общего store: начальное значение и push-обновления сейфа держит App (appData).
+  const current = useSafe();
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api.getCurrentSafe().then((v) => v !== null && setCurrent(v));
-    return subscribeToSafeChanges(setCurrent);
-  }, []);
 
   const handleSubmit = async () => {
     const value = parseIntSafe(amount);

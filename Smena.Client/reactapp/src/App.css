@@ -38,6 +38,33 @@
   font-size: 18px;
   color: var(--text);
 }
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.offline-badge {
+  color: var(--brick);
+  border: 1px solid var(--brick);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.refresh-btn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: color 0.1s ease, border-color 0.1s ease;
+}
+.refresh-btn:hover:not(:disabled) { color: var(--text); border-color: var(--brass); }
+.refresh-btn:disabled { opacity: 0.5; cursor: default; }
 
 .app-body {
   display: flex;

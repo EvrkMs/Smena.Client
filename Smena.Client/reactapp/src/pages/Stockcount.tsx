@@ -73,7 +73,10 @@ export default function Stockcount() {
   const negatives = useMemo(() => {
     return rows
       .map((r) => {
-        const fact = r.fact === '' ? 0 : Number(r.fact.replace(',', '.'));
+        // Ввод уже санитизирован (одна точка), но страхуемся: NaN здесь превращал
+        // diff в NaN, NaN < 0 === false — и позиция МОЛЧА выпадала из расхождений.
+        const parsed = Number(r.fact);
+        const fact = r.fact === '' || !Number.isFinite(parsed) ? 0 : parsed;
         const diff = fact - r.stock;
         const pct = r.stock > 0 ? (diff / r.stock) * 100 : 0;
         return { ...r, fact, diff, pct };
@@ -139,7 +142,11 @@ export default function Stockcount() {
                   <td>
                     <input className="field-input tabular table-input" value={r.fact} placeholder="0"
                       onChange={(e) => {
-                        const v = e.target.value.replace(/[^0-9.,]/g, '');
+                        // Только цифры и ОДНА десятичная точка (запятая приводится к точке).
+                        // Раньше '1.2.3' проходил фильтр и давал NaN — см. negatives выше.
+                        const raw = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                        const dot = raw.indexOf('.');
+                        const v = dot === -1 ? raw : raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, '');
                         setRows((prev) => prev.map((row) => (rowKey(row.name, row.article) === key ? { ...row, fact: v } : row)));
                         setShowResult(false);
                       }}

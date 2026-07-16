@@ -18,10 +18,12 @@ internal static class GrpcCallHelper
         }
         catch (RpcException ex)
         {
+            ErrorLog.Write("gRPC call", ex);
             return (false, $"gRPC error: {ex.StatusCode} - {ex.Message}");
         }
         catch (Exception ex)
         {
+            ErrorLog.Write("gRPC call", ex);
             return (false, $"Error: {ex.Message}");
         }
     }
@@ -41,10 +43,12 @@ internal static class GrpcCallHelper
         }
         catch (RpcException ex)
         {
+            ErrorLog.Write("gRPC call", ex);
             return onError($"gRPC: {ex.StatusCode} - {ex.Status.Detail}");
         }
         catch (Exception ex)
         {
+            ErrorLog.Write("gRPC call", ex);
             return onError(ex.Message);
         }
     }
