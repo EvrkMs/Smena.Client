@@ -150,6 +150,13 @@
 .radio-pill.active { border-color: var(--brass); color: var(--text); background: var(--brass-soft); }
 
 .photo-status { font-style: italic; }
+.photo-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.photo-progress-row .btn { margin-top: 0; }
 
 .preview-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; }
 .preview-list > div { display: flex; justify-content: space-between; font-size: 13.5px; }

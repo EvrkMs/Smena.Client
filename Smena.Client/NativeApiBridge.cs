@@ -34,6 +34,7 @@ namespace Smena.Client;
 [ClassInterface(ClassInterfaceType.None)]
 [ComVisible(true)]
 public sealed class NativeApiBridge(
+    ConstantsService constantsService,
     EmployeeService employeeService,
     SafeService safeService,
     AdvanceService advanceService,
@@ -44,6 +45,9 @@ public sealed class NativeApiBridge(
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Активное ожидание фото (сценарий на экране один — id не нужен, см. комментарий класса).
+    private CancellationTokenSource? _photoCts;
+
     /// <summary>Назначается в MainForm сразу после EnsureCoreWebView2Async.</summary>
     public CoreWebView2? Core { get; set; }
 
@@ -52,14 +56,32 @@ public sealed class NativeApiBridge(
 
     // ---------- Constants ----------
 
-    public Task<string> GetConstantsAsync() => Task.FromResult(JsonSerializer.Serialize(new
+    /// <summary>Константы приходят с сервера (единый источник); при недоступности — локальный фолбэк.</summary>
+    public async Task<string> GetConstantsAsync()
     {
-        initialCashRegister = ShiftConstants.InitialCashRegister,
-        maxEmployeesPerShift = ShiftConstants.MaxEmployeesPerShift,
-        maxHoursPerShift = ShiftConstants.MaxHoursPerShift,
-        maxAmountDigits = ShiftConstants.MaxAmountDigits,
-        maxHoursDigits = ShiftConstants.MaxHoursDigits
-    }, JsonOptions));
+        var constants = await constantsService.GetAsync();
+        return JsonSerializer.Serialize(new
+        {
+            initialCashRegister = constants.InitialCashRegister,
+            maxEmployeesPerShift = constants.MaxEmployeesPerShift,
+            maxHoursPerShift = constants.MaxHoursPerShift,
+            maxAmountDigits = constants.MaxAmountDigits,
+            maxHoursDigits = constants.MaxHoursDigits
+        }, JsonOptions);
+    }
+
+    // ---------- Photo cancellation ----------
+
+    /// <summary>
+    /// Отмена текущего ожидания фото (кнопка «Отменить» у прогресса). Действует
+    /// только на фазу ожидания фото: если фото уже получены и идёт отправка
+    /// отчёта/расхода — вызов безвреден и ни на что не влияет.
+    /// </summary>
+    public Task<string> CancelPhotoRequestAsync()
+    {
+        _photoCts?.Cancel();
+        return Task.FromResult("{}");
+    }
 
     // ---------- Employees ----------
 
@@ -173,7 +195,17 @@ public sealed class NativeApiBridge(
         void Report(string message) => PostMessage(new { type = "expenseSendProgress", message });
 
         Report("Запрашиваю фото…");
-        var photo = await photoService.RequestPhotosAsync(input.EmployeeId, Report);
+        using var photoCts = new CancellationTokenSource();
+        _photoCts = photoCts;
+        (bool Success, string Message, string? SessionKey) photo;
+        try
+        {
+            photo = await photoService.RequestPhotosAsync(input.EmployeeId, Report, photoCts.Token);
+        }
+        finally
+        {
+            _photoCts = null;
+        }
         if (!photo.Success || string.IsNullOrWhiteSpace(photo.SessionKey))
             return JsonSerializer.Serialize(new { success = false, message = photo.Message }, JsonOptions);
 
@@ -206,7 +238,17 @@ public sealed class NativeApiBridge(
         void Report(string message) => PostMessage(new { type = "raportSendProgress", message });
 
         Report("Запрашиваю фото…");
-        var photo = await photoService.RequestPhotosAsync(input.Employees[0].EmployeeId, Report);
+        using var photoCts = new CancellationTokenSource();
+        _photoCts = photoCts;
+        (bool Success, string Message, string? SessionKey) photo;
+        try
+        {
+            photo = await photoService.RequestPhotosAsync(input.Employees[0].EmployeeId, Report, photoCts.Token);
+        }
+        finally
+        {
+            _photoCts = null;
+        }
         if (!photo.Success || string.IsNullOrWhiteSpace(photo.SessionKey))
             return JsonSerializer.Serialize(new { success = false, message = photo.Message }, JsonOptions);
 

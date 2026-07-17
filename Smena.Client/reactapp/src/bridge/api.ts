@@ -64,6 +64,8 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+let mockPhotoCancelled = false;
+
 const mock: NativeApiHostObject = {
   async GetConstantsAsync() {
     return JSON.stringify({
@@ -100,20 +102,28 @@ const mock: NativeApiHostObject = {
     return JSON.stringify({ success: true, message: 'mock ok' });
   },
   async SendExpenseWithPhotoAsync() {
+    mockPhotoCancelled = false;
     dispatchMock({ type: 'expenseSendProgress', message: 'Запрашиваю фото…' });
-    await delay(400);
+    await delay(1500);
+    if (mockPhotoCancelled) return JSON.stringify({ success: false, message: 'Запрос фото отменён.' });
     dispatchMock({ type: 'expenseSendProgress', message: 'Фото получено.' });
     await delay(200);
     return JSON.stringify({ success: true, message: 'mock ok' });
   },
   async SendRaportWithPhotoAsync() {
+    mockPhotoCancelled = false;
     dispatchMock({ type: 'raportSendProgress', message: 'Запрашиваю фото…' });
-    await delay(400);
+    await delay(1500);
+    if (mockPhotoCancelled) return JSON.stringify({ success: false, message: 'Запрос фото отменён.' });
     dispatchMock({ type: 'raportSendProgress', message: 'Фото получено.' });
     await delay(200);
     dispatchMock({ type: 'raportSendProgress', message: 'Отправляю отчёт…' });
     await delay(200);
     return JSON.stringify({ success: true, message: 'mock ok' });
+  },
+  async CancelPhotoRequestAsync() {
+    mockPhotoCancelled = true;
+    return '{}';
   },
   async SearchWarehouseItemsAsync(query) {
     const q = query.toLowerCase();
@@ -242,6 +252,11 @@ export async function sendRaportWithPhoto(
   } finally {
     unsubscribe?.();
   }
+}
+
+/** Отмена текущего ожидания фото (сценарий на экране один, id не нужен). */
+export async function cancelPhotoRequest(): Promise<void> {
+  await api().CancelPhotoRequestAsync();
 }
 
 /** Общая подписка на прогресс-сообщения одного типа — без сопоставления по id (сценарий на экране один). */

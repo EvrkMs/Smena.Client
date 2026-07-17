@@ -71,7 +71,12 @@ export default function Expense() {
           </Select>
         )}
 
-        {progress && <p className="muted photo-status">{progress}</p>}
+        {progress && (
+          <div className="photo-progress-row">
+            <p className="muted photo-status">{progress}</p>
+            <Button variant="ghost" onClick={() => void api.cancelPhotoRequest()}>Отменить</Button>
+          </div>
+        )}
 
         <Button variant="danger" disabled={busy} onClick={handleSubmit}>
           {busy ? 'Провожу…' : 'Провести расход'}
