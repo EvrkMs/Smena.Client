@@ -92,6 +92,10 @@ export function useApiEngine() {
       sendRaportWithPhoto: (req: RaportRequest, onProgress?: (message: string) => void) =>
         call(api.sendRaportWithPhoto(req, onProgress)),
 
+      // ---------- Photo ----------
+      // Отмена действует только на фазу ожидания фото; после получения фото — no-op.
+      cancelPhotoRequest: () => call(api.cancelPhotoRequest()),
+
       // ---------- Warehouse ----------
       searchWarehouseItems: (query: string, limit?: number) => call(api.searchWarehouseItems(query, limit)),
 

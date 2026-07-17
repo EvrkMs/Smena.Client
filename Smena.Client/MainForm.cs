@@ -10,6 +10,7 @@ namespace Smena.Client;
 /// </summary>
 internal sealed class MainForm : Form
 {
+    private readonly ConstantsService constantsService;
     private readonly EmployeeService employeeService;
     private readonly SafeService safeService;
     private readonly RaportService raportService;
@@ -27,6 +28,7 @@ internal sealed class MainForm : Form
     {
         this.grpcService = grpcService;
 
+        constantsService = new(grpcService);
         employeeService = new(grpcService);
         safeService = new(grpcService);
         raportService = new(grpcService);
@@ -136,7 +138,7 @@ internal sealed class MainForm : Form
             "app.local", webUiFolder, CoreWebView2HostResourceAccessKind.Allow);
 
         bridge = new NativeApiBridge(
-            employeeService, safeService, advanceService, expenseService,
+            constantsService, employeeService, safeService, advanceService, expenseService,
             raportService, photoService, warehouseService)
         {
             Core = core

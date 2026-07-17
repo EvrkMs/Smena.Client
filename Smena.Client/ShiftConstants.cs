@@ -1,5 +1,10 @@
 namespace Smena.Client;
 
+/// <summary>
+/// ФОЛБЭК-значения: единый источник констант — сервер (GrpcConstantsService,
+/// см. Services/ConstantsService.cs). Эти используются только когда сервер
+/// недоступен в момент запроса.
+/// </summary>
 internal static class ShiftConstants
 {
     /// <summary>Начальная сумма наличных в кассе на начало смены.</summary>

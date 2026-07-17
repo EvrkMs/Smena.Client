@@ -12,6 +12,7 @@ export interface NativeApiHostObject {
   SendExpenseAsync(requestJson: string): Promise<string>;
   SendExpenseWithPhotoAsync(requestJson: string): Promise<string>;
   SendRaportWithPhotoAsync(requestJson: string): Promise<string>;
+  CancelPhotoRequestAsync(): Promise<string>;
   SearchWarehouseItemsAsync(query: string, limit: number): Promise<string>;
   GetAllWarehouseItemsAsync(): Promise<string>;
 }

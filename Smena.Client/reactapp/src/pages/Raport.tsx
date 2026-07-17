@@ -265,7 +265,12 @@ export default function Raport() {
             Введено минуса: {totalMinusEntered} / требуется {totalMinusExpected}
           </p>
         )}
-        {progress && <p className="muted photo-status">{progress}</p>}
+        {progress && (
+          <div className="photo-progress-row">
+            <p className="muted photo-status">{progress}</p>
+            <Button variant="ghost" onClick={() => void api.cancelPhotoRequest()}>Отменить</Button>
+          </div>
+        )}
         <Button disabled={busy || minusMismatch} onClick={handleSend}>{busy ? 'Отправляю…' : 'Отправить отчёт'}</Button>
       </Panel>
     </div>

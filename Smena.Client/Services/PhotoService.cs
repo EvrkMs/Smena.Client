@@ -51,6 +51,16 @@ public class PhotoService(GrpcService grpcService)
 
             return (false, "Photo stream ended unexpectedly", null);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Кассир нажал «Отменить»: gRPC-стрим оборван, сервер прекращает
+            // ожидание фото сам (RequestPhotos слушает отмену стрима).
+            return (false, "Запрос фото отменён.", null);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && ct.IsCancellationRequested)
+        {
+            return (false, "Запрос фото отменён.", null);
+        }
         catch (RpcException ex)
         {
             ErrorLog.Write("RequestPhotos", ex);
